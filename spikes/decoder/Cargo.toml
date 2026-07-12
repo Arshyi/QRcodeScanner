@@ -1,0 +1,17 @@
+[package]
+name = "qrforge-decoder-spike"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+image = { version = "0.25", default-features = false }
+qrcode = { version = "0.14", default-features = false, features = ["image"] }
+quircs = "0.10.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true
+

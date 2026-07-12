@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "QRForge Idle Spike",
+  "version": "0.0.0",
+  "identifier": "dev.qrforge.idle-spike",
+  "build": { "frontendDist": "../ui" },
+  "app": {
+    "security": { "csp": "default-src 'self'" },
+    "windows": []
+  },
+  "bundle": { "active": false }
+}
+

@@ -1,0 +1,32 @@
+name: phase-0
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-spikes:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - name: Format
+        run: cargo fmt --manifest-path spikes/Cargo.toml --all --check
+      - name: Check
+        run: cargo check --manifest-path spikes/Cargo.toml --workspace --all-targets
+      - name: Clippy
+        run: cargo clippy --manifest-path spikes/Cargo.toml --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --manifest-path spikes/Cargo.toml --workspace
+      - name: Release build
+        run: cargo build --release --manifest-path spikes/Cargo.toml --workspace
+
