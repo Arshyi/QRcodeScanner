@@ -1,6 +1,6 @@
 use qrforge_application::{HotkeyPort, PortError};
 use qrforge_domain::{Hotkey, HotkeyKey};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -47,15 +47,12 @@ impl HotkeyPort for TauriHotkey {
     fn active(&self) -> Option<Hotkey> {
         self.active
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .clone()
     }
 
     fn replace(&self, requested: &Hotkey) -> Result<(), PortError> {
-        let mut active = self
-            .active
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut active = self.active.lock().unwrap_or_else(PoisonError::into_inner);
         if active.as_ref() == Some(requested) {
             return Ok(());
         }

@@ -131,16 +131,14 @@ impl ScanService {
         let started = self.ports.clock.now();
 
         let capture_started = self.ports.clock.now();
-        let frame = match self.ports.capture.capture_primary() {
-            Ok(frame) => frame,
-            Err(_) => return self.failed(started, FailureStage::Capture),
+        let Ok(frame) = self.ports.capture.capture_primary() else {
+            return self.failed(started, FailureStage::Capture);
         };
         let capture_ms = elapsed_ms(capture_started, self.ports.clock.now());
 
         let decode_started = self.ports.clock.now();
-        let detections = match self.ports.decoder.decode(&frame) {
-            Ok(detections) => detections,
-            Err(_) => return self.failed(started, FailureStage::Decode),
+        let Ok(detections) = self.ports.decoder.decode(&frame) else {
+            return self.failed(started, FailureStage::Decode);
         };
         let decode_ms = elapsed_ms(decode_started, self.ports.clock.now());
         let detection_count = detections.len();
@@ -340,6 +338,24 @@ mod tests {
         )
     }
 
+    fn service_with_settings(
+        detections: Vec<Detection>,
+        calls: Arc<Calls>,
+        settings: AppSettings,
+    ) -> ScanService {
+        ScanService::new(
+            ScanPorts {
+                capture: Arc::new(FixedCapture),
+                decoder: Arc::new(FixedDecoder(detections)),
+                browser: calls.clone(),
+                clipboard: calls.clone(),
+                notifications: calls,
+                clock: Arc::new(StepClock(Mutex::new(Duration::ZERO))),
+            },
+            Arc::new(SettingsState::new(settings)),
+        )
+    }
+
     #[test]
     fn orchestrates_capture_decode_and_safe_url_policy() {
         let calls = Arc::new(Calls::default());
@@ -454,6 +470,86 @@ mod tests {
         assert_eq!(
             background.join().expect("scan thread").outcome,
             ScanOutcome::NoCode
+        );
+    }
+
+    #[test]
+    fn auto_open_disabled_detects_safe_url_without_opening_or_clipboard() {
+        let calls = Arc::new(Calls::default());
+        let report = service_with_settings(
+            vec![detection(b"https://example.com/qrforge")],
+            calls.clone(),
+            AppSettings {
+                auto_open_safe_urls: false,
+                ..AppSettings::default()
+            },
+        )
+        .scan();
+        assert_eq!(report.outcome, ScanOutcome::UrlDetected);
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+        assert!(calls.clipboard.lock().expect("clipboard mutex").is_empty());
+    }
+
+    #[test]
+    fn clipboard_disabled_treats_plain_text_as_unsupported() {
+        let calls = Arc::new(Calls::default());
+        let report = service_with_settings(
+            vec![detection(b"private plain text")],
+            calls.clone(),
+            AppSettings {
+                copy_non_url_payloads: false,
+                ..AppSettings::default()
+            },
+        )
+        .scan();
+        assert_eq!(report.outcome, ScanOutcome::UnsupportedPayload);
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+        assert!(calls.clipboard.lock().expect("clipboard mutex").is_empty());
+    }
+
+    #[test]
+    fn notifications_disabled_suppresses_feedback() {
+        let calls = Arc::new(Calls::default());
+        let report = service_with_settings(
+            Vec::new(),
+            calls.clone(),
+            AppSettings {
+                notifications_enabled: false,
+                ..AppSettings::default()
+            },
+        )
+        .scan();
+        assert_eq!(report.outcome, ScanOutcome::NoCode);
+        assert!(
+            calls
+                .notifications
+                .lock()
+                .expect("notifications mutex")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn unicode_payload_is_classified_as_plain_text() {
+        let calls = Arc::new(Calls::default());
+        let report = service(vec![detection("héllo 🌍 wörld".as_bytes())], calls.clone()).scan();
+        assert_eq!(report.outcome, ScanOutcome::TextCopied);
+        assert_eq!(
+            calls.clipboard.lock().expect("clipboard mutex").as_slice(),
+            ["héllo 🌍 wörld"]
+        );
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+    }
+
+    #[test]
+    fn malformed_url_is_classified_as_plain_text() {
+        let calls = Arc::new(Calls::default());
+        let report = service(vec![detection(b"http:///missing-host")], calls.clone()).scan();
+        assert_eq!(report.outcome, ScanOutcome::TextCopied);
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+        assert_eq!(
+            calls.clipboard.lock().expect("clipboard mutex").as_slice(),
+            ["http:///missing-host"]
         );
     }
 }

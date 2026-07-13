@@ -186,8 +186,10 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let path = directory.path().join("nested").join("settings.json");
         let repository = FileSettingsRepository::new(path);
-        let mut settings = AppSettings::default();
-        settings.notifications_enabled = false;
+        let settings = AppSettings {
+            notifications_enabled: false,
+            ..AppSettings::default()
+        };
         repository.save(&settings).expect("atomic save");
         assert_eq!(repository.load().expect("reload"), settings);
     }

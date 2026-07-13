@@ -4,7 +4,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Mutex, PoisonError},
     time::Duration,
 };
 
@@ -62,7 +62,7 @@ impl Diagnostics {
         let _guard = self
             .write_lock
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .unwrap_or_else(PoisonError::into_inner);
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
             let _ = serde_json::to_writer(&mut file, value);
             let _ = file.write_all(b"\n");

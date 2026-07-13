@@ -27,17 +27,24 @@ pub struct CommandError {
 
 /// Returns the current validated settings view.
 #[tauri::command]
+// Tauri deserializes each command argument through its `CommandArg` trait,
+// which requires owned values for non-`State` types. Taking references here
+// would break the IPC deserializer.
+#[allow(clippy::needless_pass_by_value)]
 pub fn get_settings(state: State<'_, RuntimeState>) -> SettingsView {
     view(state.settings.snapshot())
 }
 
 /// Applies a complete typed settings update transactionally.
 #[tauri::command]
+// `request` is deserialized by Tauri from the IPC payload, and `state` is
+// provided by Tauri's managed-state injection. Both must be owned values.
+#[allow(clippy::needless_pass_by_value)]
 pub fn update_settings(
     request: SettingsUpdate,
     state: State<'_, RuntimeState>,
 ) -> Result<SettingsView, CommandError> {
-    match state.settings.update(request) {
+    match state.settings.update(&request) {
         Ok(snapshot) => Ok(view(snapshot)),
         Err(SettingsError::InvalidHotkey(_)) => Err(CommandError {
             code: "invalid_hotkey",

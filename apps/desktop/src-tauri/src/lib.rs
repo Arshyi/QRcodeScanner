@@ -27,6 +27,14 @@ use std::{sync::Arc, time::Instant};
 use tauri::{Manager, RunEvent};
 
 /// Starts the tray-first desktop host.
+///
+/// # Panics
+///
+/// Panics if the Tauri runtime cannot be initialized (for example, if the
+/// bundled resource context is missing or the system fails to register the
+/// tray icon). Process startup and the initial setup closure may also return
+/// errors that the host has no sensible recovery for, so they propagate as
+/// panics on the main thread.
 pub fn run() {
     let process_started = Instant::now();
     let app = tauri::Builder::default()
