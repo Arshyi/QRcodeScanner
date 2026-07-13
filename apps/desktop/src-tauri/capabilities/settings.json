@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings-ipc",
+  "description": "Allows the local settings webview to invoke QRForge's typed application commands.",
+  "windows": ["settings"],
+  "permissions": ["core:default"]
+}

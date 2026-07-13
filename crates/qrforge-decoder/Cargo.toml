@@ -1,0 +1,19 @@
+[package]
+name = "qrforge-decoder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+qrforge-application.workspace = true
+qrforge-domain.workspace = true
+zxing-cpp = { version = "=0.5.2", default-features = false, features = ["bundled"] }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[lints]
+workspace = true

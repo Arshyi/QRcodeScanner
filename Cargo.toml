@@ -1,0 +1,48 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/qrforge-application",
+  "crates/qrforge-capture",
+  "crates/qrforge-decoder",
+  "crates/qrforge-domain",
+  "crates/qrforge-platform",
+  "crates/qrforge-storage",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Arshyi/QRcodeScanner"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+qrforge-application = { path = "crates/qrforge-application" }
+qrforge-capture = { path = "crates/qrforge-capture" }
+qrforge-decoder = { path = "crates/qrforge-decoder" }
+qrforge-domain = { path = "crates/qrforge-domain" }
+qrforge-platform = { path = "crates/qrforge-platform" }
+qrforge-storage = { path = "crates/qrforge-storage" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+doc_markdown = "allow"
+fn_params_excessive_bools = "allow"
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+struct_excessive_bools = "allow"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

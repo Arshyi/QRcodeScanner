@@ -13,6 +13,7 @@ jobs:
     runs-on: windows-latest
     env:
       CMAKE_GENERATOR: Visual Studio 17 2022
+      CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\msvc-runtime.cmake
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
