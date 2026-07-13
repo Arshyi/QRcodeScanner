@@ -174,3 +174,4 @@ The decoder fixture unit test passed. The first test invocation timed out during
 
 Phase 0 validates Rust, the Tauri host-only lifecycle, pure-Rust multi-code performance, and Windows webcam feasibility. It rejects a permanently hidden webview and one-shot full-resolution capture as primary production designs.
 
+Phase 0.5 closes the remaining architecture gates in [`phase-0-5-results.md`](phase-0-5-results.md). It accepts persistent WGC for active Smart Scroll, ZXing-C++ as the primary decoder, and Tauri lazy webview creation/destruction. One-shot capture retains a separate measured fallback path and revised evidence-based budget.

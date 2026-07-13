@@ -6,6 +6,7 @@ These programs validate architecture choices and are not production modules.
 - `decoder`: deterministic in-memory multi-QR correctness and latency.
 - `webcam`: Windows Media Foundation enumeration and physical frame delivery.
 - `tauri-idle`: host-only versus hidden-webview process-tree resources.
+- `windows-wgc`: persistent Windows Graphics Capture with full and centered-region readback.
+- `decoder-comparison`: generated realistic corpus decoded identically by quircs and ZXing-C++.
 
 All benchmarks print JSON. They never persist captured images or camera frames.
-

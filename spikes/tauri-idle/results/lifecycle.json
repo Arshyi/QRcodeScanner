@@ -1,0 +1,195 @@
+{
+  "spike": "lazy-tauri-webview-lifecycle",
+  "cycles": 10,
+  "host_only": {
+    "resident_memory_mib": 17.8515625,
+    "normalized_cpu_percent": 0.0013609274,
+    "process_count": 1
+  },
+  "create_latency_ms": {
+    "min": 476.22090000000003,
+    "median": 484.5455,
+    "p95": 535.1127,
+    "max": 535.1127
+  },
+  "visible_memory_mib": {
+    "min": 338.78125,
+    "median": 339.7265625,
+    "p95": 341.875,
+    "max": 341.875
+  },
+  "post_destroy_memory_mib": {
+    "min": 32.03125,
+    "median": 32.41015625,
+    "p95": 32.6328125,
+    "max": 32.6328125
+  },
+  "post_destroy_memory_growth_mib": 0.6015625,
+  "maximum_process_count": 7,
+  "heartbeat_ticks": 552,
+  "tray_present_all_cycles": true,
+  "host_service_functional": true,
+  "shutdown_requested": true,
+  "cycle_results": [
+    {
+      "cycle": 1,
+      "create_ms": 535.1127,
+      "visible": {
+        "resident_memory_mib": 339.46484375,
+        "normalized_cpu_percent": 0.5084681,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1353,
+      "post_destroy": {
+        "resident_memory_mib": 32.03125,
+        "normalized_cpu_percent": 0.5050505,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 2,
+      "create_ms": 484.5455,
+      "visible": {
+        "resident_memory_mib": 338.78125,
+        "normalized_cpu_percent": 0.004177796,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1371,
+      "post_destroy": {
+        "resident_memory_mib": 32.17578125,
+        "normalized_cpu_percent": 0.0,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 3,
+      "create_ms": 484.1253,
+      "visible": {
+        "resident_memory_mib": 341.71484375,
+        "normalized_cpu_percent": 0.51528615,
+        "process_count": 7
+      },
+      "destroy_ms": 0.133,
+      "post_destroy": {
+        "resident_memory_mib": 32.27734375,
+        "normalized_cpu_percent": 0.0,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 4,
+      "create_ms": 528.3521,
+      "visible": {
+        "resident_memory_mib": 341.43359375,
+        "normalized_cpu_percent": 0.5092555,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1383,
+      "post_destroy": {
+        "resident_memory_mib": 32.36328125,
+        "normalized_cpu_percent": 0.5050505,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 5,
+      "create_ms": 476.22090000000003,
+      "visible": {
+        "resident_memory_mib": 339.26953125,
+        "normalized_cpu_percent": 0.51907045,
+        "process_count": 7
+      },
+      "destroy_ms": 0.12990000000000002,
+      "post_destroy": {
+        "resident_memory_mib": 32.38671875,
+        "normalized_cpu_percent": 0.5141388,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 6,
+      "create_ms": 482.5463,
+      "visible": {
+        "resident_memory_mib": 339.26953125,
+        "normalized_cpu_percent": 0.51537746,
+        "process_count": 7
+      },
+      "destroy_ms": 0.13369999999999999,
+      "post_destroy": {
+        "resident_memory_mib": 32.41015625,
+        "normalized_cpu_percent": 0.51150894,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 7,
+      "create_ms": 490.5973,
+      "visible": {
+        "resident_memory_mib": 339.1484375,
+        "normalized_cpu_percent": 0.50376666,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1429,
+      "post_destroy": {
+        "resident_memory_mib": 32.41015625,
+        "normalized_cpu_percent": 0.0,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 8,
+      "create_ms": 483.03950000000003,
+      "visible": {
+        "resident_memory_mib": 340.08203125,
+        "normalized_cpu_percent": 0.504852,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1272,
+      "post_destroy": {
+        "resident_memory_mib": 32.5078125,
+        "normalized_cpu_percent": 0.0,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 9,
+      "create_ms": 483.3125,
+      "visible": {
+        "resident_memory_mib": 341.875,
+        "normalized_cpu_percent": 0.004157292,
+        "process_count": 7
+      },
+      "destroy_ms": 0.1564,
+      "post_destroy": {
+        "resident_memory_mib": 32.51171875,
+        "normalized_cpu_percent": 0.5050505,
+        "process_count": 1
+      },
+      "tray_present": true
+    },
+    {
+      "cycle": 10,
+      "create_ms": 494.3325,
+      "visible": {
+        "resident_memory_mib": 339.7265625,
+        "normalized_cpu_percent": 0.50864434,
+        "process_count": 7
+      },
+      "destroy_ms": 0.13329999999999997,
+      "post_destroy": {
+        "resident_memory_mib": 32.6328125,
+        "normalized_cpu_percent": 0.0,
+        "process_count": 1
+      },
+      "tray_present": true
+    }
+  ]
+}

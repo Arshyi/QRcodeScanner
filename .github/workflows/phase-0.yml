@@ -11,6 +11,8 @@ permissions:
 jobs:
   windows-spikes:
     runs-on: windows-latest
+    env:
+      CMAKE_GENERATOR: Visual Studio 17 2022
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -29,4 +31,3 @@ jobs:
         run: cargo test --manifest-path spikes/Cargo.toml --workspace
       - name: Release build
         run: cargo build --release --manifest-path spikes/Cargo.toml --workspace
-

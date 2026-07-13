@@ -5,6 +5,8 @@ members = [
   "decoder",
   "webcam",
   "tauri-idle/src-tauri",
+  "windows-wgc",
+  "decoder-comparison",
 ]
 
 [workspace.package]
@@ -18,4 +20,3 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
-

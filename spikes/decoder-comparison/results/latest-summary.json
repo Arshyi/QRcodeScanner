@@ -1,0 +1,22 @@
+{
+  "fixtures": 13,
+  "iterations_per_fixture": 30,
+  "identical_inputs": true,
+  "quircs": {
+    "categories_passed": 11,
+    "categories_total": 13,
+    "aggregate_latency_ms": { "median": 6.4273, "p95": 24.7074 },
+    "physical_memory_delta_mib": 5.7344,
+    "failures": ["inverted", "perspective_distorted"]
+  },
+  "zxing_cpp": {
+    "categories_passed": 12,
+    "categories_total": 13,
+    "aggregate_latency_ms": { "median": 4.1307, "p95": 22.1809 },
+    "physical_memory_delta_mib": 0.0,
+    "failures": ["perspective_distorted"],
+    "release_executable_bytes": 6497792
+  },
+  "pure_rust_baseline_release_executable_bytes": 314880
+}
+

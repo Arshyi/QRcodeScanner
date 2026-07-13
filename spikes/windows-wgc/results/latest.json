@@ -1,0 +1,37 @@
+{
+  "environment": {
+    "monitor": "Color LCD",
+    "width": 2880,
+    "height": 1800,
+    "scale_factor": 2.0,
+    "activity_driver": "local WinForms animation, approximately 60 Hz"
+  },
+  "full": {
+    "startup_ms": 143.8571,
+    "first_frame_ms": 347.6951,
+    "frames": 100,
+    "failures": 0,
+    "frame_interval_ms": { "median": 264.4121, "p95": 279.6557 },
+    "gpu_to_cpu_readback_ms": { "median": 6.1433, "p95": 6.8533 },
+    "useful_samples_per_second": 3.8343,
+    "normalized_cpu_percent": 0.02496,
+    "physical_memory_start_mib": 18.9141,
+    "physical_memory_end_mib": 46.5703
+  },
+  "center_region": {
+    "sampled_width": 960,
+    "sampled_height": 600,
+    "startup_ms": 109.7524,
+    "first_frame_ms": 437.0557,
+    "frames": 100,
+    "failures": 0,
+    "frame_interval_ms": { "median": 263.9404, "p95": 279.7548 },
+    "gpu_to_cpu_readback_ms": { "median": 1.3192, "p95": 1.3290 },
+    "useful_samples_per_second": 3.8257,
+    "normalized_cpu_percent": 0.0,
+    "physical_memory_start_mib": 46.8984,
+    "physical_memory_end_mib": 29.8359
+  },
+  "implementation_limit": "windows-capture 2.0 reuses the WGC session/frame-pool GPU resources but allocates a CPU staging texture for each buffer or buffer_crop call"
+}
+
