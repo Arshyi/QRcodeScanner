@@ -1,2 +1,18 @@
-# QRcodeScanner
-A lightweight desktop QR utility that instantly detects QR codes from your screen or webcam and opens them in your browser—no screenshots or uploads required. Features global hotkeys, smart scroll detection, duplicate filtering, offline decoding, customizable settings, and seamless background operation with minimal CPU and memory usage.
+# QRForge
+
+A lightweight desktop QR code scanner that instantly detects QR codes from your screen and opens them in your browser—no screenshots or uploads required. Works globally with a hotkey, decodes offline locally, and operates in the system tray with minimal resource usage.
+
+## Status: Phase 1 MVP Complete ✓
+
+QRForge is now a **usable Windows MVP** with:
+- Tray-first application lifecycle
+- Global hotkey scan (Ctrl+Shift+Q by default, customizable)
+- One-shot primary screen capture
+- Local offline QR decoding via ZXing-C++
+- Safe URL opening (http/https only)
+- Plain-text and blocked-scheme handling
+- Native notifications
+- Persistent settings
+- Comprehensive test coverage (37 tests passing)
+
+See [Phase 1 Results](docs/phase-1-results.md) for detailed measurements and architecture.
