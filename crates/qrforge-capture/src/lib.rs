@@ -17,11 +17,26 @@ impl CapturePort for XcapCapture {
             .find(|candidate| candidate.is_primary().unwrap_or(false))
             .or_else(|| monitors.first())
             .ok_or_else(|| PortError::new("capture_enumeration", "no monitor was found"))?;
+
+        // Extract monitor metadata for diagnostics
+        let monitor_name = monitor.name().ok();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let scale_factor = monitor
+            .scale_factor()
+            .ok()
+            .map(|factor| (factor * 100.0) as u32);
+
         let image = monitor
             .capture_image()
             .map_err(|error| PortError::new("capture_primary", error.to_string()))?;
         let (width, height) = image.dimensions();
-        CapturedFrame::rgba8(width, height, image.into_raw())
-            .map_err(|error| PortError::new("capture_primary", error.to_string()))
+        CapturedFrame::rgba8_with_metadata(
+            width,
+            height,
+            image.into_raw(),
+            monitor_name,
+            scale_factor,
+        )
+        .map_err(|error| PortError::new("capture_primary", error.to_string()))
     }
 }

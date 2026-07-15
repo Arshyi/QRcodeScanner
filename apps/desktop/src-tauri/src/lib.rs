@@ -4,6 +4,7 @@ mod commands;
 mod diagnostics;
 mod notification;
 mod runtime;
+mod single_instance;
 mod startup;
 mod tray;
 mod window;
@@ -35,7 +36,16 @@ use tauri::{Manager, RunEvent};
 /// tray icon). Process startup and the initial setup closure may also return
 /// errors that the host has no sensible recovery for, so they propagate as
 /// panics on the main thread.
+///
+/// # Single-instance enforcement
+///
+/// Only one QRForge host may run at a time. A second launch will exit after
+/// printing an error message. The lock is released on normal exit.
 pub fn run() {
+    // Acquire single-instance lock before Tauri initialization.
+    // If this fails, the process exits immediately.
+    let _lock = single_instance::acquire_or_exit();
+
     let process_started = Instant::now();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())

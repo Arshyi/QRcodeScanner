@@ -94,6 +94,23 @@ pub struct ScanReport {
     pub outcome: ScanOutcome,
     /// Non-sensitive timing data.
     pub metrics: ScanMetrics,
+    /// Optional capture metadata for diagnostics (monitor, scaling).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_metadata: Option<CaptureMetadata>,
+}
+
+/// Lightweight capture metadata for diagnostics (no pixel data).
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureMetadata {
+    /// Human-readable monitor identifier.
+    pub monitor_label: Option<String>,
+    /// Windows display scaling factor as a percentage (e.g. 100, 125, 200).
+    pub scale_factor_percent: Option<u32>,
+    /// Captured image width in physical pixels.
+    pub pixel_width: u32,
+    /// Captured image height in physical pixels.
+    pub pixel_height: u32,
 }
 
 /// Thread-safe one-shot capture, decode, and payload-policy orchestrator.
@@ -125,6 +142,7 @@ impl ScanService {
             return ScanReport {
                 outcome: ScanOutcome::AlreadyInProgress,
                 metrics: ScanMetrics::default(),
+                capture_metadata: None,
             };
         }
         let _lease = ScanLease(&self.in_progress);
@@ -135,6 +153,14 @@ impl ScanService {
             return self.failed(started, FailureStage::Capture);
         };
         let capture_ms = elapsed_ms(capture_started, self.ports.clock.now());
+
+        // Extract capture metadata for diagnostics (monitor, scaling, dimensions).
+        let capture_metadata = Some(CaptureMetadata {
+            monitor_label: frame.monitor_label.clone(),
+            scale_factor_percent: frame.scale_factor,
+            pixel_width: frame.width(),
+            pixel_height: frame.height(),
+        });
 
         let decode_started = self.ports.clock.now();
         let Ok(detections) = self.ports.decoder.decode(&frame) else {
@@ -152,6 +178,7 @@ impl ScanService {
                 total_ms: elapsed_ms(started, self.ports.clock.now()),
                 detection_count,
             },
+            capture_metadata,
         }
     }
 
@@ -223,6 +250,7 @@ impl ScanService {
                 total_ms: elapsed_ms(started, self.ports.clock.now()),
                 ..ScanMetrics::default()
             },
+            capture_metadata: None,
         }
     }
 

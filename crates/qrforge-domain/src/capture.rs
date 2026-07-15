@@ -17,6 +17,12 @@ pub struct CapturedFrame {
     height: u32,
     format: PixelFormat,
     pixels: Vec<u8>,
+    /// Optional diagnostic label for the monitor captured (e.g. "Primary", "DP-1").
+    /// Not part of core frame validation; used for logging only.
+    pub monitor_label: Option<String>,
+    /// Optional Windows display scaling factor (e.g. 100, 125, 150, 200).
+    /// Not part of core frame validation; used for logging only.
+    pub scale_factor: Option<u32>,
 }
 
 impl CapturedFrame {
@@ -42,7 +48,23 @@ impl CapturedFrame {
             height,
             format: PixelFormat::Rgba8,
             pixels,
+            monitor_label: None,
+            scale_factor: None,
         })
+    }
+
+    /// Creates a validated RGBA frame with optional diagnostic metadata.
+    pub fn rgba8_with_metadata(
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        monitor_label: Option<String>,
+        scale_factor: Option<u32>,
+    ) -> Result<Self, FrameError> {
+        let mut frame = Self::rgba8(width, height, pixels)?;
+        frame.monitor_label = monitor_label;
+        frame.scale_factor = scale_factor;
+        Ok(frame)
     }
 
     /// Returns the frame width in physical pixels.
