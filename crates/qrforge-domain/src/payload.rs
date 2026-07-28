@@ -35,6 +35,15 @@ pub enum PayloadClass {
         /// Original text, retained only for optional clipboard copying.
         text: String,
     },
+    /// An HTTP(S) URL that is syntactically valid but unsafe to auto-open
+    /// because its authority can mislead a user.
+    BlockedUrl {
+        /// Original text, retained only for optional clipboard copying.
+        text: String,
+    },
+    /// Valid UTF-8 containing control characters or no content. It is neither
+    /// opened nor copied to avoid clipboard control-sequence injection.
+    UnsafeText,
     /// Non-UTF-8 payload bytes. These are preserved by the detection but not
     /// coerced onto a text clipboard.
     Binary,
@@ -46,7 +55,10 @@ pub fn classify_payload(payload: &[u8]) -> PayloadClass {
     let Ok(text) = std::str::from_utf8(payload) else {
         return PayloadClass::Binary;
     };
-    if text.is_empty() || text.trim() != text || text.bytes().any(|byte| byte.is_ascii_control()) {
+    if text.is_empty() || text.chars().any(char::is_control) {
+        return PayloadClass::UnsafeText;
+    }
+    if text.trim() != text {
         return PayloadClass::PlainText(text.to_owned());
     }
 
@@ -70,6 +82,15 @@ pub fn classify_payload(payload: &[u8]) -> PayloadClass {
         || parsed.host_str().is_none()
     {
         return PayloadClass::PlainText(text.to_owned());
+    }
+    let has_credentials = !parsed.username().is_empty() || parsed.password().is_some();
+    let has_idn_label = parsed
+        .host_str()
+        .is_some_and(|host| host.split('.').any(|label| label.starts_with("xn--")));
+    if has_credentials || has_idn_label {
+        return PayloadClass::BlockedUrl {
+            text: text.to_owned(),
+        };
     }
 
     let normalized = parsed.to_string();
@@ -96,6 +117,10 @@ mod tests {
             classify_payload(b"http:///missing-host"),
             PayloadClass::PlainText(_)
         ));
+        assert!(matches!(
+            classify_payload(b"https://[invalid"),
+            PayloadClass::PlainText(_)
+        ));
     }
 
     #[test]
@@ -119,12 +144,37 @@ mod tests {
     }
 
     #[test]
+    fn blocks_credential_bearing_and_idn_urls_from_auto_opening() {
+        for value in [
+            "https://trusted.example@evil.example/",
+            "https://user:secret@example.com/",
+            "https://xn--pple-43d.com/",
+            "https://\u{0430}pple.com/",
+        ] {
+            assert!(
+                matches!(
+                    classify_payload(value.as_bytes()),
+                    PayloadClass::BlockedUrl { .. }
+                ),
+                "{value} should require explicit handling"
+            );
+        }
+    }
+
+    #[test]
     fn preserves_plain_text_and_binary_classification() {
         assert_eq!(
             classify_payload(b"hello from QRForge"),
             PayloadClass::PlainText("hello from QRForge".to_owned())
         );
         assert_eq!(classify_payload(&[0xff, 0xfe]), PayloadClass::Binary);
+    }
+
+    #[test]
+    fn control_sequences_are_never_copyable_text() {
+        for value in [b"".as_slice(), b"line one\nline two", b"hello\0world"] {
+            assert_eq!(classify_payload(value), PayloadClass::UnsafeText);
+        }
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use crate::tray;
 use qrforge_application::{Notification, NotificationPort, PortError};
 use std::{
     sync::{
@@ -46,10 +47,8 @@ impl NotificationPort for TauriNotifications {
             let app = self.app.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_secs(4));
-                if counter.load(Ordering::Acquire) == generation
-                    && let Some(tray) = app.tray_by_id("main-tray")
-                {
-                    let _ = tray.set_tooltip(Some("QRForge — Ctrl+Shift+Q to scan"));
+                if counter.load(Ordering::Acquire) == generation {
+                    let _ = tray::refresh_idle_tooltip(&app);
                 }
             });
         }

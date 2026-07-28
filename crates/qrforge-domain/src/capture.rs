@@ -19,15 +19,18 @@ pub struct CapturedFrame {
     pixels: Vec<u8>,
     /// Optional diagnostic label for the monitor captured (e.g. "Primary", "DP-1").
     /// Not part of core frame validation; used for logging only.
-    pub monitor_label: Option<String>,
+    monitor_label: Option<String>,
     /// Optional Windows display scaling factor (e.g. 100, 125, 150, 200).
     /// Not part of core frame validation; used for logging only.
-    pub scale_factor: Option<u32>,
+    scale_factor_percent: Option<u32>,
 }
 
 impl CapturedFrame {
     /// Creates a validated RGBA frame without copying the provided buffer.
     pub fn rgba8(width: u32, height: u32, pixels: Vec<u8>) -> Result<Self, FrameError> {
+        if width == 0 || height == 0 {
+            return Err(FrameError::ZeroDimension);
+        }
         let expected = usize::try_from(width)
             .ok()
             .and_then(|width| {
@@ -49,7 +52,7 @@ impl CapturedFrame {
             format: PixelFormat::Rgba8,
             pixels,
             monitor_label: None,
-            scale_factor: None,
+            scale_factor_percent: None,
         })
     }
 
@@ -59,11 +62,11 @@ impl CapturedFrame {
         height: u32,
         pixels: Vec<u8>,
         monitor_label: Option<String>,
-        scale_factor: Option<u32>,
+        scale_factor_percent: Option<u32>,
     ) -> Result<Self, FrameError> {
         let mut frame = Self::rgba8(width, height, pixels)?;
-        frame.monitor_label = monitor_label;
-        frame.scale_factor = scale_factor;
+        frame.monitor_label = monitor_label.filter(|label| !label.trim().is_empty());
+        frame.scale_factor_percent = scale_factor_percent.filter(|factor| *factor > 0);
         Ok(frame)
     }
 
@@ -90,11 +93,26 @@ impl CapturedFrame {
     pub fn pixels(&self) -> &[u8] {
         &self.pixels
     }
+
+    /// Returns the optional non-sensitive monitor label supplied by capture.
+    #[must_use]
+    pub fn monitor_label(&self) -> Option<&str> {
+        self.monitor_label.as_deref()
+    }
+
+    /// Returns the optional display scaling percentage supplied by capture.
+    #[must_use]
+    pub const fn scale_factor_percent(&self) -> Option<u32> {
+        self.scale_factor_percent
+    }
 }
 
 /// Validation failures for captured pixel buffers.
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum FrameError {
+    /// A decoder frame must have non-zero width and height.
+    #[error("frame dimensions must be non-zero")]
+    ZeroDimension,
     /// Width, height, and channel count overflowed the host address space.
     #[error("frame dimensions overflow the address space")]
     DimensionsOverflow,
@@ -115,6 +133,10 @@ mod tests {
     #[test]
     fn validates_rgba_buffer_length() {
         assert!(CapturedFrame::rgba8(2, 2, vec![0; 16]).is_ok());
+        assert_eq!(
+            CapturedFrame::rgba8(0, 2, Vec::new()),
+            Err(FrameError::ZeroDimension)
+        );
         assert_eq!(
             CapturedFrame::rgba8(2, 2, vec![0; 15]),
             Err(FrameError::InvalidBufferLength {

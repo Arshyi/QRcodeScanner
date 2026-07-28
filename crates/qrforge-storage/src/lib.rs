@@ -29,9 +29,10 @@ impl FileSettingsRepository {
 
     fn read_document(&self) -> Result<Option<Value>, PortError> {
         match fs::read(&self.path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map(Some)
-                .map_err(|error| PortError::new("settings_read", error.to_string())),
+            // A malformed document is treated as corrupt user configuration,
+            // not as a host-startup failure. The caller receives validated
+            // defaults and can replace the file on the next successful save.
+            Ok(bytes) => Ok(serde_json::from_slice(&bytes).ok()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(PortError::new("settings_read", error.to_string())),
         }
@@ -192,5 +193,39 @@ mod tests {
         };
         repository.save(&settings).expect("atomic save");
         assert_eq!(repository.load().expect("reload"), settings);
+    }
+
+    #[test]
+    fn atomic_save_replaces_an_existing_windows_file() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("settings.json");
+        let repository = FileSettingsRepository::new(path);
+        repository
+            .save(&AppSettings::default())
+            .expect("initial save");
+        let replacement = AppSettings {
+            auto_open_safe_urls: false,
+            ..AppSettings::default()
+        };
+
+        repository.save(&replacement).expect("replacement save");
+        assert_eq!(repository.load().expect("reload replacement"), replacement);
+    }
+
+    #[test]
+    fn malformed_json_falls_back_without_destroying_the_source_file() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("settings.json");
+        fs::write(&path, b"{ definitely not json").expect("write corrupt fixture");
+        let repository = FileSettingsRepository::new(path.clone());
+
+        assert_eq!(
+            repository.load().expect("corruption fallback"),
+            AppSettings::default()
+        );
+        assert_eq!(
+            fs::read(path).expect("corrupt source remains available"),
+            b"{ definitely not json"
+        );
     }
 }

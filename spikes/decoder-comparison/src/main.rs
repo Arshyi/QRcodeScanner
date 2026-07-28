@@ -113,9 +113,11 @@ fn perspective_like(source: &GrayImage) -> GrayImage {
 #[allow(clippy::too_many_lines)]
 fn corpus() -> Vec<Fixture> {
     let normal_payload = b"https://example.com/qrforge/normal";
+    let plain_text_payload = b"hello from QRForge";
     let unicode_payload = "QRForge: こんにちは • Привет • مرحبا".as_bytes();
     let binary_payload: &[u8] = &[0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff, b'Q', b'R'];
     let unusual_url = b"javascript:alert('qrforge-test')";
+    let malformed_url = b"https://[invalid";
 
     let mut normal = canvas(1280, 720, 238);
     for y in 0..normal.height() {
@@ -177,11 +179,17 @@ fn corpus() -> Vec<Fixture> {
     let mut unicode = canvas(1200, 850, 255);
     centered(&mut unicode, &qr(unicode_payload, 7));
 
+    let mut plain_text = canvas(1100, 800, 255);
+    centered(&mut plain_text, &qr(plain_text_payload, 8));
+
     let mut binary = canvas(1000, 800, 255);
     centered(&mut binary, &qr(binary_payload, 9));
 
     let mut unusual = canvas(1100, 800, 250);
     centered(&mut unusual, &qr(unusual_url, 8));
+
+    let mut malformed = canvas(1100, 800, 250);
+    centered(&mut malformed, &qr(malformed_url, 8));
 
     let mut false_positive = canvas(1280, 720, 248);
     for y in (40..680).step_by(48) {
@@ -258,6 +266,12 @@ fn corpus() -> Vec<Fixture> {
             expected: expected(&[unicode_payload]),
         },
         Fixture {
+            name: "plain-text",
+            category: "plain_text",
+            image: plain_text,
+            expected: expected(&[plain_text_payload]),
+        },
+        Fixture {
             name: "binary",
             category: "binary",
             image: binary,
@@ -268,6 +282,12 @@ fn corpus() -> Vec<Fixture> {
             category: "malicious_unusual_url",
             image: unusual,
             expected: expected(&[unusual_url]),
+        },
+        Fixture {
+            name: "malformed-url",
+            category: "malformed_url_like_text",
+            image: malformed,
+            expected: expected(&[malformed_url]),
         },
         Fixture {
             name: "false-positive",

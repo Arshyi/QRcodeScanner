@@ -29,9 +29,9 @@ native capture -> native decoder -> Rust safety policy
 | Threat | Required control |
 |---|---|
 | Dangerous URL schemes or command-like text | Parse in Rust; auto-open only HTTP(S); never invoke a shell |
-| Homograph or credential-bearing URL | Show normalized host; warn on IDN/punycode and embedded credentials |
+| Homograph or credential-bearing URL | Phase 1 blocks IDN/punycode hosts and embedded credentials from auto-open; a future chooser may show a normalized host and require confirmation |
 | Repeated detections during scrolling | Cooldown, stable-detection rule, bounded queue, tab cap, emergency stop |
-| Multiple URLs in one frame | Result chooser by default; explicit capped automation only |
+| Multiple URLs in one frame | Phase 1 performs no automatic action; a future result chooser must require an explicit selection |
 | Webview compromise | Strict CSP, no remote content, per-window capabilities, typed validated commands |
 | Retained screen/camera data | Reusable memory-only buffers, redacted logs, no screenshot history |
 | Camera remains active | Explicit visible session, cancellation on close/suspend, OS permission flow |
@@ -53,4 +53,3 @@ native capture -> native decoder -> Rust safety policy
 - A valid HTTPS destination still receives normal browser/network metadata.
 - Malware running as the user may independently observe the screen or read local files.
 - OS capture/camera APIs and the system webview remain trusted dependencies.
-

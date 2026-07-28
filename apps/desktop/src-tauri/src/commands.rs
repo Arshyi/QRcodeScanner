@@ -1,7 +1,7 @@
 use crate::runtime::RuntimeState;
 use qrforge_application::{Notification, SettingsError, SettingsSnapshot, SettingsUpdate};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State, Wry};
 
 /// Complete typed settings response consumed by the Svelte UI.
 #[derive(Serialize)]
@@ -43,9 +43,13 @@ pub fn get_settings(state: State<'_, RuntimeState>) -> SettingsView {
 pub fn update_settings(
     request: SettingsUpdate,
     state: State<'_, RuntimeState>,
+    app: AppHandle<Wry>,
 ) -> Result<SettingsView, CommandError> {
     match state.settings.update(&request) {
-        Ok(snapshot) => Ok(view(snapshot)),
+        Ok(snapshot) => {
+            let _ = crate::tray::refresh_idle_tooltip(&app);
+            Ok(view(snapshot))
+        }
         Err(SettingsError::InvalidHotkey(_)) => Err(CommandError {
             code: "invalid_hotkey",
             message: "Use at least one modifier and one letter, digit, or F-key.",

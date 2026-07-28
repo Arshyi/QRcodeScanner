@@ -4,7 +4,6 @@ mod commands;
 mod diagnostics;
 mod notification;
 mod runtime;
-mod single_instance;
 mod startup;
 mod tray;
 mod window;
@@ -12,7 +11,7 @@ mod window;
 use crate::{
     diagnostics::Diagnostics,
     notification::TauriNotifications,
-    runtime::{RuntimeState, spawn_scan},
+    runtime::{RuntimeState, ScanDispatcher},
     startup::TauriStartup,
 };
 use qrforge_application::{
@@ -37,17 +36,16 @@ use tauri::{Manager, RunEvent};
 /// errors that the host has no sensible recovery for, so they propagate as
 /// panics on the main thread.
 ///
-/// # Single-instance enforcement
-///
-/// Only one QRForge host may run at a time. A second launch will exit after
-/// printing an error message. The lock is released on normal exit.
+/// Tauri's single-instance plugin owns the platform lock. A second launch
+/// asks the running process to open or focus Settings, then exits.
 pub fn run() {
-    // Acquire single-instance lock before Tauri initialization.
-    // If this fails, the process exits immediately.
-    let _lock = single_instance::acquire_or_exit();
-
     let process_started = Instant::now();
     let app = tauri::Builder::default()
+        // This must remain the first plugin so it can stop duplicate hosts
+        // before any other plugin performs process-wide initialization.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = window::open(app);
+        }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
@@ -78,10 +76,10 @@ pub fn run() {
                 },
                 settings_state.clone(),
             ));
+            let scans = Arc::new(ScanDispatcher::new(scan, diagnostics.clone()));
             let hotkeys = Arc::new(TauriHotkey::new(app.handle().clone(), {
-                let scan = scan.clone();
-                let diagnostics = diagnostics.clone();
-                Arc::new(move || spawn_scan(scan.clone(), diagnostics.clone(), "hotkey"))
+                let scans = scans.clone();
+                Arc::new(move || scans.spawn("hotkey"))
             }));
             let startup = Arc::new(TauriStartup::new(app.handle().clone()));
             let settings = Arc::new(SettingsService::new(
@@ -90,14 +88,15 @@ pub fn run() {
                 startup,
                 settings_state,
             ));
+            let hotkey_conflict = hotkeys.replace(&initial_settings.hotkey).is_err();
             app.manage(RuntimeState {
-                scan,
+                scans,
                 settings,
                 notifications: notifications.clone(),
                 diagnostics: diagnostics.clone(),
             });
             tray::create(app)?;
-            if hotkeys.replace(&initial_settings.hotkey).is_err() {
+            if hotkey_conflict {
                 let _ = notifications.notify(Notification::HotkeyConflict);
             }
             diagnostics.record_startup(process_started.elapsed());

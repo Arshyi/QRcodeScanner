@@ -1,0 +1,6 @@
+[env]
+# Rust's MSVC targets use the dynamic release CRT in every Cargo profile.
+# The `cmake` crate consumes CMAKE_TOOLCHAIN_FILE and passes it to bundled
+# dependencies, so Debug and Release ZXing-C++ objects use the same runtime as
+# their Rust callers.
+CMAKE_TOOLCHAIN_FILE = { value = "cmake/msvc-runtime.cmake", relative = true }

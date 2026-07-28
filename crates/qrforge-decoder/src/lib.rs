@@ -127,4 +127,18 @@ mod tests {
                 .is_empty()
         );
     }
+
+    #[test]
+    fn regression_plain_text_and_malformed_url_fixtures_preserve_bytes() {
+        for (name, expected) in [
+            ("plain-text.png", b"hello from QRForge".as_slice()),
+            ("malformed-url.png", b"https://[invalid".as_slice()),
+        ] {
+            let results = ZxingDecoder
+                .decode(&fixture(name))
+                .expect("decode text fixture");
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].raw_bytes, expected);
+        }
+    }
 }

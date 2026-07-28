@@ -138,12 +138,7 @@ impl ScanService {
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
         {
-            self.feedback(Notification::ScanAlreadyInProgress);
-            return ScanReport {
-                outcome: ScanOutcome::AlreadyInProgress,
-                metrics: ScanMetrics::default(),
-                capture_metadata: None,
-            };
+            return self.already_in_progress();
         }
         let _lease = ScanLease(&self.in_progress);
         let started = self.ports.clock.now();
@@ -156,8 +151,8 @@ impl ScanService {
 
         // Extract capture metadata for diagnostics (monitor, scaling, dimensions).
         let capture_metadata = Some(CaptureMetadata {
-            monitor_label: frame.monitor_label.clone(),
-            scale_factor_percent: frame.scale_factor,
+            monitor_label: frame.monitor_label().map(ToOwned::to_owned),
+            scale_factor_percent: frame.scale_factor_percent(),
             pixel_width: frame.width(),
             pixel_height: frame.height(),
         });
@@ -179,6 +174,17 @@ impl ScanService {
                 detection_count,
             },
             capture_metadata,
+        }
+    }
+
+    /// Reports a duplicate activation rejected before a worker was created.
+    #[must_use]
+    pub fn already_in_progress(&self) -> ScanReport {
+        self.feedback(Notification::ScanAlreadyInProgress);
+        ScanReport {
+            outcome: ScanOutcome::AlreadyInProgress,
+            metrics: ScanMetrics::default(),
+            capture_metadata: None,
         }
     }
 
@@ -223,7 +229,9 @@ impl ScanService {
                 self.feedback(Notification::TextCopied);
                 ScanOutcome::TextCopied
             }
-            PayloadClass::BlockedScheme { text, .. } if settings.copy_non_url_payloads => {
+            PayloadClass::BlockedScheme { text, .. } | PayloadClass::BlockedUrl { text }
+                if settings.copy_non_url_payloads =>
+            {
                 if self.ports.clipboard.set_text(&text).is_err() {
                     self.feedback(Notification::ScanFailed);
                     return ScanOutcome::Failed {
@@ -233,8 +241,10 @@ impl ScanService {
                 self.feedback(Notification::BlockedPayloadCopied);
                 ScanOutcome::BlockedPayloadCopied
             }
-            PayloadClass::PlainText(_)
+            PayloadClass::UnsafeText
+            | PayloadClass::PlainText(_)
             | PayloadClass::BlockedScheme { .. }
+            | PayloadClass::BlockedUrl { .. }
             | PayloadClass::Binary => {
                 self.feedback(Notification::UnsupportedPayload);
                 ScanOutcome::UnsupportedPayload
@@ -411,6 +421,15 @@ mod tests {
     }
 
     #[test]
+    fn control_sequences_are_neither_copied_nor_opened() {
+        let calls = Arc::new(Calls::default());
+        let report = service(vec![detection(b"first line\r\nsecond line")], calls.clone()).scan();
+        assert_eq!(report.outcome, ScanOutcome::UnsupportedPayload);
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+        assert!(calls.clipboard.lock().expect("clipboard mutex").is_empty());
+    }
+
+    #[test]
     fn blocked_scheme_is_copied_but_never_opened() {
         let calls = Arc::new(Calls::default());
         let report = service(vec![detection(b"javascript:alert(1)")], calls.clone()).scan();
@@ -419,6 +438,22 @@ mod tests {
         assert_eq!(
             calls.clipboard.lock().expect("clipboard mutex").as_slice(),
             ["javascript:alert(1)"]
+        );
+    }
+
+    #[test]
+    fn spoofable_http_url_is_copied_but_never_opened() {
+        let calls = Arc::new(Calls::default());
+        let report = service(
+            vec![detection(b"https://trusted.example@evil.example/")],
+            calls.clone(),
+        )
+        .scan();
+        assert_eq!(report.outcome, ScanOutcome::BlockedPayloadCopied);
+        assert!(calls.browser.lock().expect("browser mutex").is_empty());
+        assert_eq!(
+            calls.clipboard.lock().expect("clipboard mutex").as_slice(),
+            ["https://trusted.example@evil.example/"]
         );
     }
 
