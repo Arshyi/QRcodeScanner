@@ -18,12 +18,13 @@
 
 body {
   margin: 0;
-  min-width: 420px;
+  min-width: 320px;
   min-height: 100vh;
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -101,12 +102,84 @@ h1 {
   box-shadow: 0 7px 24px rgb(32 73 63 / 6%);
 }
 
+.onboarding,
+.monitor-card {
+  padding: 20px;
+}
+
+.onboarding,
+.results-dialog {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  color: inherit;
+}
+
+.onboarding h2 {
+  margin: 7px 0 12px;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.onboarding p,
+.onboarding li {
+  line-height: 1.55;
+}
+
+.onboarding ul {
+  padding-left: 22px;
+}
+
+kbd {
+  padding: 2px 6px;
+  border: 1px solid #aebdb8;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #f4f7f5;
+  font-family: inherit;
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
 .hotkey-card {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px 20px;
   padding: 20px;
+}
+
+.monitor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.monitor-card > div,
+.monitor-card select {
+  grid-column: 1 / -1;
+}
+
+.monitor-card select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 36px 10px 12px;
+  border: 1px solid #b8c9c3;
+  border-radius: 9px;
+  color: inherit;
+  background: #f8fbfa;
+}
+
+.monitor-card .registration {
+  grid-column: 1;
+  align-self: center;
+}
+
+.monitor-card .secondary {
+  grid-column: 2;
+  grid-row: 3;
 }
 
 .label,
@@ -141,10 +214,42 @@ small,
 }
 
 .hotkey:hover,
-.hotkey:focus-visible,
 .hotkey.capturing {
   border-color: #16866d;
-  outline: none;
+}
+
+.primary,
+.secondary {
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid #16866d;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  color: #ffffff;
+  background: #126b58;
+}
+
+.secondary {
+  color: #126b58;
+  background: #f8fbfa;
+}
+
+.primary:hover {
+  background: #0d5d4c;
+}
+
+.secondary:hover {
+  background: #e8f6f1;
+}
+
+.keyboard-hint {
+  margin: 11px 0 0;
+  color: #667972;
+  font-size: 12px;
 }
 
 .registration {
@@ -205,8 +310,7 @@ input[type='checkbox']:checked::after {
 }
 
 input[type='checkbox']:focus-visible {
-  outline: 3px solid rgb(22 134 109 / 24%);
-  outline-offset: 2px;
+  outline: none;
 }
 
 .privacy {
@@ -254,6 +358,111 @@ input[type='checkbox']:focus-visible {
   color: #667972;
 }
 
+.status-area {
+  min-height: 42px;
+}
+
+.results-main {
+  width: min(100%, 680px);
+  padding-top: 28px;
+}
+
+.results-dialog {
+  min-width: 0;
+}
+
+.chooser-summary {
+  margin: -8px 0 18px;
+  color: #526961;
+  line-height: 1.5;
+}
+
+.result-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dce5e1;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.result-heading,
+.result-actions,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.result-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.kind {
+  padding: 4px 8px;
+  border: 1px solid #a7cfc3;
+  border-radius: 999px;
+  color: #126b58;
+  background: #e8f6f1;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kind.blocked {
+  border-color: #ddb7a8;
+  color: #7c3428;
+  background: #fff0eb;
+}
+
+.result-detail {
+  margin: 10px 0 0;
+  color: #73501c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.payload-preview {
+  max-height: 9rem;
+  margin: 10px 0 13px;
+  padding: 11px;
+  overflow: auto;
+  border: 1px solid #e0e6e3;
+  border-radius: 8px;
+  color: inherit;
+  background: #f5f8f6;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result-actions,
+.dialog-actions {
+  flex-wrap: wrap;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #16866d;
+  outline-offset: 3px;
+}
+
 footer {
   display: flex;
   justify-content: space-between;
@@ -263,9 +472,92 @@ footer {
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+select:disabled {
   cursor: wait;
   opacity: 0.62;
+}
+
+@media (max-width: 520px) {
+  main {
+    padding: 24px 18px 20px;
+  }
+
+  header {
+    align-items: flex-start;
+  }
+
+  .local-pill {
+    white-space: nowrap;
+  }
+
+  .hotkey-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hotkey {
+    width: 100%;
+  }
+
+  .options label {
+    gap: 12px;
+  }
+
+  .monitor-card {
+    grid-template-columns: 1fr;
+  }
+
+  .monitor-card .registration,
+  .monitor-card .secondary {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .dialog-actions > button,
+  .result-actions > button {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root,
+  .card,
+  .result-card,
+  .payload-preview,
+  .privacy,
+  .local-pill,
+  .kind,
+  .kind.blocked,
+  .primary,
+  .secondary,
+  .hotkey,
+  .monitor-card select {
+    color: CanvasText;
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+
+  .primary:focus-visible,
+  .secondary:focus-visible,
+  .hotkey:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline-color: Highlight;
+  }
+
+  input[type='checkbox'] {
+    appearance: auto;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -274,13 +566,17 @@ input:disabled {
     background: #111815;
   }
 
-  .card {
+  .card,
+  .result-card {
     border-color: #2d3d37;
     background: #18231f;
     box-shadow: none;
   }
 
-  .hotkey {
+  .hotkey,
+  .monitor-card select,
+  .secondary,
+  .payload-preview {
     border-color: #486159;
     color: #ecf4f1;
     background: #1e2d28;
@@ -297,7 +593,9 @@ input:disabled {
   .privacy p,
   .hint,
   small,
-  .registration {
+  .registration,
+  .keyboard-hint,
+  .chooser-summary {
     color: #9bb0a9;
   }
 }

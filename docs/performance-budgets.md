@@ -7,7 +7,7 @@ These are release gates measured on named reference hardware, not universal clai
 | Tray-idle CPU | <= 0.5% mean, <= 1.0% p95 | 1 Hz process-tree deltas after 10 s warm-up |
 | Tray-idle private memory | <= 60 MiB p95 | Sum private working set for process tree |
 | Hidden-webview private memory | Record separately | Same method; not treated as tray-idle target |
-| One-shot primary-monitor capture | <= 70 ms median, <= 80 ms p95 | 100 release captures after 10 warm-ups; revised from 35/60 using measured xcap evidence |
+| One-shot selected-monitor capture | <= 70 ms median, <= 80 ms p95 | 100 release captures after 10 warm-ups; exact physical dimensions required |
 | One-shot capture plus clear QR decode | <= 150 ms p95 | Capture and decode timed separately, then assessed end-to-end |
 | Persistent WGC full readback | <= 15 ms p95 | GPU-to-CPU readback only after session startup |
 | Persistent WGC region readback | <= 5 ms p95 | Center or configured region suitable for preprocessing |
@@ -17,6 +17,7 @@ These are release gates measured on named reference hardware, not universal clai
 | Idle capture/decoder work | Zero calls | Integration counters/assertions |
 | Lazy webview creation | <= 750 ms p95 | Ten create/destroy cycles |
 | Post-destroy resident memory growth | <= 5 MiB over ten cycles | Transient child cleanup is allowed only if it recovers by the next cycle |
+| Multi-code chooser hotkey-to-visible result | <= 150 ms p95 | Ten release scans with exact ordered results |
 
 ## Runtime policy
 

@@ -1,4 +1,4 @@
-use image::{GrayImage, Luma, imageops};
+use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage, imageops};
 use memory_stats::memory_stats;
 use qrcode::{EcLevel, QrCode};
 use serde::Serialize;
@@ -16,7 +16,8 @@ const ITERATIONS: usize = 30;
 struct Fixture {
     name: &'static str,
     category: &'static str,
-    image: GrayImage,
+    saved_image: DynamicImage,
+    benchmark_image: GrayImage,
     expected: BTreeSet<Vec<u8>>,
 }
 
@@ -60,9 +61,42 @@ struct Report {
     iterations_per_fixture: usize,
     identical_inputs: bool,
     qr_family_only: bool,
+    accepted_zxing_failures: Vec<&'static str>,
     quircs: EngineReport,
     zxing_cpp: EngineReport,
     zxing_build: ZxingBuildCost,
+}
+
+fn grayscale_fixture(
+    name: &'static str,
+    category: &'static str,
+    image: GrayImage,
+    expected: BTreeSet<Vec<u8>>,
+) -> Fixture {
+    Fixture {
+        name,
+        category,
+        saved_image: DynamicImage::ImageLuma8(image.clone()),
+        benchmark_image: image,
+        expected,
+    }
+}
+
+fn color_fixture(
+    name: &'static str,
+    category: &'static str,
+    image: RgbImage,
+    expected: BTreeSet<Vec<u8>>,
+) -> Fixture {
+    let saved_image = DynamicImage::ImageRgb8(image);
+    let benchmark_image = saved_image.to_luma8();
+    Fixture {
+        name,
+        category,
+        saved_image,
+        benchmark_image,
+        expected,
+    }
 }
 
 #[derive(Serialize)]
@@ -191,6 +225,78 @@ fn corpus() -> Vec<Fixture> {
     let mut malformed = canvas(1100, 800, 250);
     centered(&mut malformed, &qr(malformed_url, 8));
 
+    let downscaled_source = qr(b"downscaled-screen-code", 12);
+    let downscaled_symbol = imageops::resize(
+        &downscaled_source,
+        downscaled_source.width() / 3,
+        downscaled_source.height() / 3,
+        imageops::FilterType::Lanczos3,
+    );
+    let mut downscaled = canvas(960, 720, 247);
+    centered(&mut downscaled, &downscaled_symbol);
+
+    let mut browser_rendered = canvas(1365, 768, 234);
+    for y in 0..74 {
+        for x in 0..browser_rendered.width() {
+            browser_rendered.put_pixel(x, y, Luma([if y < 42 { 214 } else { 245 }]));
+        }
+    }
+    for x in 112..870 {
+        for y in 12..34 {
+            browser_rendered.put_pixel(x, y, Luma([250]));
+        }
+    }
+    let browser_symbol = qr(b"https://example.com/browser-rendered", 7);
+    let mut browser_card = canvas(
+        browser_symbol.width() + 88,
+        browser_symbol.height() + 88,
+        255,
+    );
+    centered(&mut browser_card, &browser_symbol);
+    imageops::overlay(&mut browser_rendered, &browser_card, 760, 180);
+
+    let compressed_source = imageops::blur(&qr(b"screenshot-compressed-code", 8), 0.65);
+    let mut screenshot_compressed = canvas(1280, 720, 243);
+    centered(&mut screenshot_compressed, &compressed_source);
+    for pixel in screenshot_compressed.pixels_mut() {
+        pixel.0[0] = (pixel.0[0] / 12) * 12;
+    }
+
+    let color_symbol = qr(b"colored-foreground-background", 8);
+    let mut colored = RgbImage::from_pixel(1200, 850, Rgb([232, 244, 237]));
+    let color_x = (colored.width() - color_symbol.width()) / 2;
+    let color_y = (colored.height() - color_symbol.height()) / 2;
+    for (x, y, pixel) in color_symbol.enumerate_pixels() {
+        let rgb = if pixel.0[0] < 128 {
+            Rgb([15, 76, 134])
+        } else {
+            Rgb([250, 232, 174])
+        };
+        colored.put_pixel(color_x + x, color_y + y, rgb);
+    }
+
+    let mut high_dpi = canvas(3840, 2160, 248);
+    let high_dpi_symbol = qr(b"high-dpi-rendering-200-percent", 14);
+    centered(&mut high_dpi, &high_dpi_symbol);
+
+    let mut dense_ui = canvas(1600, 1000, 239);
+    for row in 0..12 {
+        let y = 45 + row * 72;
+        for column in 0..6 {
+            let x = 42 + column * 250;
+            let shade = if (row + column) % 2 == 0 { 72 } else { 160 };
+            for py in y..(y + 18) {
+                for px in x..(x + 170) {
+                    dense_ui.put_pixel(px, py, Luma([shade]));
+                }
+            }
+        }
+    }
+    let dense_symbol = qr(b"dense-ui-background-code", 8);
+    let mut dense_card = canvas(dense_symbol.width() + 72, dense_symbol.height() + 72, 255);
+    centered(&mut dense_card, &dense_symbol);
+    imageops::overlay(&mut dense_ui, &dense_card, 1040, 600);
+
     let mut false_positive = canvas(1280, 720, 248);
     for y in (40..680).step_by(48) {
         for x in (40..1240).step_by(48) {
@@ -205,96 +311,112 @@ fn corpus() -> Vec<Fixture> {
     }
 
     vec![
-        Fixture {
-            name: "normal-screen",
-            category: "normal_screen",
-            image: normal,
-            expected: expected(&[normal_payload]),
-        },
-        Fixture {
-            name: "multiple",
-            category: "multiple",
-            image: multiple,
-            expected: expected(&multi_payloads),
-        },
-        Fixture {
-            name: "rotated",
-            category: "rotated",
-            image: rotated,
-            expected: expected(&[b"rotated-90-degrees"]),
-        },
-        Fixture {
-            name: "inverted",
-            category: "inverted",
-            image: inverted,
-            expected: expected(&[b"inverted-code"]),
-        },
-        Fixture {
-            name: "low-contrast",
-            category: "low_contrast",
-            image: low_contrast,
-            expected: expected(&[b"low-contrast-code"]),
-        },
-        Fixture {
-            name: "blurred",
-            category: "blurred",
-            image: blurred,
-            expected: expected(&[b"blurred-code"]),
-        },
-        Fixture {
-            name: "damaged",
-            category: "partially_damaged",
-            image: damaged,
-            expected: expected(&[b"partially-damaged-code"]),
-        },
-        Fixture {
-            name: "perspective",
-            category: "perspective_distorted",
-            image: perspective,
-            expected: expected(&[b"perspective-distorted"]),
-        },
-        Fixture {
-            name: "small-high-res",
-            category: "small_high_resolution",
-            image: small_high_res,
-            expected: expected(&[b"small-in-high-resolution"]),
-        },
-        Fixture {
-            name: "unicode",
-            category: "unicode",
-            image: unicode,
-            expected: expected(&[unicode_payload]),
-        },
-        Fixture {
-            name: "plain-text",
-            category: "plain_text",
-            image: plain_text,
-            expected: expected(&[plain_text_payload]),
-        },
-        Fixture {
-            name: "binary",
-            category: "binary",
-            image: binary,
-            expected: expected(&[binary_payload]),
-        },
-        Fixture {
-            name: "unusual-url",
-            category: "malicious_unusual_url",
-            image: unusual,
-            expected: expected(&[unusual_url]),
-        },
-        Fixture {
-            name: "malformed-url",
-            category: "malformed_url_like_text",
-            image: malformed,
-            expected: expected(&[malformed_url]),
-        },
-        Fixture {
-            name: "false-positive",
-            category: "false_positive_background",
-            image: false_positive,
-            expected: BTreeSet::new(),
-        },
+        grayscale_fixture(
+            "normal-screen",
+            "normal_screen",
+            normal,
+            expected(&[normal_payload]),
+        ),
+        grayscale_fixture("multiple", "multiple", multiple, expected(&multi_payloads)),
+        grayscale_fixture(
+            "rotated",
+            "rotated",
+            rotated,
+            expected(&[b"rotated-90-degrees"]),
+        ),
+        grayscale_fixture(
+            "inverted",
+            "inverted",
+            inverted,
+            expected(&[b"inverted-code"]),
+        ),
+        grayscale_fixture(
+            "low-contrast",
+            "low_contrast",
+            low_contrast,
+            expected(&[b"low-contrast-code"]),
+        ),
+        grayscale_fixture("blurred", "blurred", blurred, expected(&[b"blurred-code"])),
+        grayscale_fixture(
+            "damaged",
+            "partially_obscured",
+            damaged,
+            expected(&[b"partially-damaged-code"]),
+        ),
+        grayscale_fixture(
+            "perspective",
+            "perspective_distorted",
+            perspective,
+            expected(&[b"perspective-distorted"]),
+        ),
+        grayscale_fixture(
+            "small-high-res",
+            "small_high_resolution",
+            small_high_res,
+            expected(&[b"small-in-high-resolution"]),
+        ),
+        grayscale_fixture("unicode", "unicode", unicode, expected(&[unicode_payload])),
+        grayscale_fixture(
+            "plain-text",
+            "plain_text",
+            plain_text,
+            expected(&[plain_text_payload]),
+        ),
+        grayscale_fixture("binary", "binary", binary, expected(&[binary_payload])),
+        grayscale_fixture(
+            "unusual-url",
+            "dangerous_scheme",
+            unusual,
+            expected(&[unusual_url]),
+        ),
+        grayscale_fixture(
+            "malformed-url",
+            "malformed_url_like_text",
+            malformed,
+            expected(&[malformed_url]),
+        ),
+        grayscale_fixture(
+            "downscaled",
+            "downscaled",
+            downscaled,
+            expected(&[b"downscaled-screen-code"]),
+        ),
+        grayscale_fixture(
+            "browser-rendered",
+            "browser_rendered",
+            browser_rendered,
+            expected(&[b"https://example.com/browser-rendered"]),
+        ),
+        grayscale_fixture(
+            "screenshot-compressed",
+            "screenshot_compressed",
+            screenshot_compressed,
+            expected(&[b"screenshot-compressed-code"]),
+        ),
+        color_fixture(
+            "colored",
+            "colored_foreground_background",
+            colored,
+            expected(&[b"colored-foreground-background"]),
+        ),
+        grayscale_fixture(
+            "high-dpi",
+            "high_dpi_rendering",
+            high_dpi,
+            expected(&[b"high-dpi-rendering-200-percent"]),
+        ),
+        grayscale_fixture(
+            "dense-ui",
+            "dense_ui_background",
+            dense_ui,
+            expected(&[b"dense-ui-background-code"]),
+        ),
+        grayscale_fixture(
+            "false-positive",
+            "no_code_false_positive",
+            false_positive,
+            BTreeSet::new(),
+        ),
     ]
 }
 
@@ -302,7 +424,7 @@ fn write_corpus(fixtures: &[Fixture], output: &Path) -> Result<(), Box<dyn std::
     fs::create_dir_all(output)?;
     for fixture in fixtures {
         fixture
-            .image
+            .saved_image
             .save(output.join(format!("{}.png", fixture.name)))?;
     }
     Ok(())
@@ -332,13 +454,13 @@ where
     let mut results = Vec::with_capacity(fixtures.len());
 
     for fixture in fixtures {
-        let _ = decode(&fixture.image);
+        let _ = decode(&fixture.benchmark_image);
         let mut timings = Vec::with_capacity(ITERATIONS);
         let mut latest = BTreeSet::new();
         let mut correct = 0;
         for _ in 0..ITERATIONS {
             let started = Instant::now();
-            latest = decode(&fixture.image);
+            latest = decode(&fixture.benchmark_image);
             let elapsed = started.elapsed().as_secs_f64() * 1_000.0;
             timings.push(elapsed);
             all_timings.push(elapsed);
@@ -424,11 +546,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let report = Report {
         spike: "real-world-decoder-comparison",
-        corpus_path: corpus_path.display().to_string(),
+        corpus_path: "spikes/decoder-comparison/fixtures/generated".to_owned(),
         fixtures: fixtures.len(),
         iterations_per_fixture: ITERATIONS,
         identical_inputs: true,
         qr_family_only: true,
+        accepted_zxing_failures: vec!["perspective.png"],
         quircs,
         zxing_cpp,
         zxing_build: ZxingBuildCost {
@@ -438,6 +561,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ffi_boundary: "unsafe implementation is contained in the third-party zxing-cpp wrapper",
         },
     };
-    println!("{}", serde_json::to_string_pretty(&report)?);
+    let serialized = serde_json::to_string_pretty(&report)?;
+    if let Ok(report_path) = std::env::var("QRFORGE_REPORT_PATH") {
+        let report_path = PathBuf::from(report_path);
+        if let Some(parent) = report_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(report_path, &serialized)?;
+    }
+    println!("{serialized}");
+
+    let accepted = report
+        .accepted_zxing_failures
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let actual = report
+        .zxing_cpp
+        .results
+        .iter()
+        .filter(|result| result.failure.is_some())
+        .map(|result| result.fixture.as_str())
+        .collect::<BTreeSet<_>>();
+    if actual != accepted {
+        return Err(format!(
+            "ZXing fixture failures changed: accepted {accepted:?}, actual {actual:?}"
+        )
+        .into());
+    }
     Ok(())
 }

@@ -15,8 +15,8 @@ use crate::{
     startup::TauriStartup,
 };
 use qrforge_application::{
-    HotkeyPort, Notification, NotificationPort, ScanPorts, ScanService, SettingsRepository,
-    SettingsService, SettingsState,
+    CapturePort, HotkeyPort, Notification, NotificationPort, ResultService, ScanPorts, ScanService,
+    SettingsRepository, SettingsService, SettingsState,
 };
 use qrforge_capture::XcapCapture;
 use qrforge_decoder::ZxingDecoder;
@@ -54,7 +54,10 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
-            commands::update_settings
+            commands::update_settings,
+            commands::complete_onboarding,
+            commands::get_pending_results,
+            commands::perform_result_action
         ])
         .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
@@ -65,18 +68,27 @@ pub fn run() {
             let settings_state = Arc::new(SettingsState::new(initial_settings.clone()));
             let notifications: Arc<dyn NotificationPort> =
                 Arc::new(TauriNotifications::new(app.handle().clone()));
+            let capture: Arc<dyn CapturePort> = Arc::new(XcapCapture);
+            let browser = Arc::new(SystemBrowser);
+            let clipboard = Arc::new(SystemClipboard);
+            let results = Arc::new(ResultService::new(browser.clone(), clipboard.clone()));
             let scan = Arc::new(ScanService::new(
                 ScanPorts {
-                    capture: Arc::new(XcapCapture),
+                    capture: capture.clone(),
                     decoder: Arc::new(ZxingDecoder),
-                    browser: Arc::new(SystemBrowser),
-                    clipboard: Arc::new(SystemClipboard),
+                    browser,
+                    clipboard,
                     notifications: notifications.clone(),
                     clock: Arc::new(SystemClock::new()),
                 },
                 settings_state.clone(),
             ));
-            let scans = Arc::new(ScanDispatcher::new(scan, diagnostics.clone()));
+            let scans = Arc::new(ScanDispatcher::new(
+                scan,
+                diagnostics.clone(),
+                results.clone(),
+                app.handle().clone(),
+            ));
             let hotkeys = Arc::new(TauriHotkey::new(app.handle().clone(), {
                 let scans = scans.clone();
                 Arc::new(move || scans.spawn("hotkey"))
@@ -92,12 +104,17 @@ pub fn run() {
             app.manage(RuntimeState {
                 scans,
                 settings,
+                capture,
+                results,
                 notifications: notifications.clone(),
                 diagnostics: diagnostics.clone(),
             });
             tray::create(app)?;
             if hotkey_conflict {
                 let _ = notifications.notify(Notification::HotkeyConflict);
+            }
+            if hotkey_conflict || !initial_settings.onboarding_completed {
+                let _ = window::open(app.handle());
             }
             diagnostics.record_startup(process_started.elapsed());
             Ok(())

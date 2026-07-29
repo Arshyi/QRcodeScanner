@@ -1,1 +1,1 @@
-{"settings-ipc":{"identifier":"settings-ipc","description":"Allows the local settings webview to invoke QRForge's typed application commands.","local":true,"windows":["settings"],"permissions":[]}}
+{"settings-ipc":{"identifier":"settings-ipc","description":"Allows QRForge's local settings and result-chooser webviews to invoke narrow typed commands.","local":true,"windows":["settings","results"],"permissions":[]}}

@@ -1,5 +1,5 @@
 use crate::{HotkeyPort, PortError, SettingsRepository, StartupPort};
-use qrforge_domain::{AppSettings, Hotkey, SETTINGS_SCHEMA_VERSION};
+use qrforge_domain::{AppSettings, Hotkey, MonitorId, SETTINGS_SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, PoisonError, RwLock};
 use thiserror::Error;
@@ -42,6 +42,8 @@ pub struct SettingsUpdate {
     pub copy_non_url_payloads: bool,
     /// Requested notification behavior.
     pub notifications_enabled: bool,
+    /// Requested physical display or automatic primary-display selection.
+    pub scan_monitor_id: Option<String>,
 }
 
 /// Typed settings snapshot returned to the frontend.
@@ -103,6 +105,12 @@ impl SettingsService {
             .parse()
             .map_err(SettingsError::InvalidHotkey)?;
         let old = self.state.get();
+        let scan_monitor_id = update
+            .scan_monitor_id
+            .as_deref()
+            .map(str::parse::<MonitorId>)
+            .transpose()
+            .map_err(SettingsError::InvalidMonitor)?;
         let old_startup = self.startup.is_enabled().unwrap_or(old.launch_at_startup);
         let desired = AppSettings {
             schema_version: SETTINGS_SCHEMA_VERSION,
@@ -111,6 +119,8 @@ impl SettingsService {
             auto_open_safe_urls: update.auto_open_safe_urls,
             copy_non_url_payloads: update.copy_non_url_payloads,
             notifications_enabled: update.notifications_enabled,
+            scan_monitor_id,
+            onboarding_completed: old.onboarding_completed,
         };
 
         let hotkey_changed = desired.hotkey != old.hotkey || self.hotkeys.active().is_none();
@@ -142,6 +152,20 @@ impl SettingsService {
         self.state.replace(desired);
         Ok(self.snapshot())
     }
+
+    /// Persists completion of the dismissible first-run introduction.
+    pub fn complete_onboarding(&self) -> Result<SettingsSnapshot, SettingsError> {
+        let mut desired = self.state.get();
+        if desired.onboarding_completed {
+            return Ok(self.snapshot());
+        }
+        desired.onboarding_completed = true;
+        self.repository
+            .save(&desired)
+            .map_err(SettingsError::Persistence)?;
+        self.state.replace(desired);
+        Ok(self.snapshot())
+    }
 }
 
 /// Settings validation, platform, persistence, or rollback failure.
@@ -150,6 +174,9 @@ pub enum SettingsError {
     /// Hotkey syntax was invalid.
     #[error("invalid hotkey: {0}")]
     InvalidHotkey(qrforge_domain::HotkeyParseError),
+    /// Persisted or IPC monitor identifier was invalid.
+    #[error("invalid monitor identifier: {0}")]
+    InvalidMonitor(qrforge_domain::MonitorIdError),
     /// Operating-system registration rejected the new hotkey.
     #[error("hotkey registration failed: {0}")]
     HotkeyRegistration(PortError),
@@ -298,6 +325,7 @@ mod tests {
             auto_open_safe_urls: true,
             copy_non_url_payloads: true,
             notifications_enabled: true,
+            scan_monitor_id: None,
         });
 
         assert!(matches!(result, Err(SettingsError::HotkeyRegistration(_))));
@@ -335,6 +363,7 @@ mod tests {
             auto_open_safe_urls: true,
             copy_non_url_payloads: true,
             notifications_enabled: true,
+            scan_monitor_id: None,
         });
 
         // Rollback re-registering the default hotkey is rejected, so the
@@ -368,6 +397,7 @@ mod tests {
             auto_open_safe_urls: true,
             copy_non_url_payloads: true,
             notifications_enabled: true,
+            scan_monitor_id: None,
         });
 
         assert!(matches!(result, Err(SettingsError::Startup(_))));
@@ -396,6 +426,7 @@ mod tests {
             auto_open_safe_urls: true,
             copy_non_url_payloads: true,
             notifications_enabled: true,
+            scan_monitor_id: None,
         });
 
         assert!(matches!(result, Err(SettingsError::Persistence(_))));
@@ -427,5 +458,72 @@ mod tests {
         let snapshot = service.snapshot();
         assert!(snapshot.hotkey_registered);
         assert_eq!(snapshot.active_hotkey.as_deref(), Some("Ctrl+Shift+Q"));
+    }
+
+    #[test]
+    fn onboarding_completion_is_persisted_without_platform_changes() {
+        let repository = Arc::new(Repository::default());
+        let hotkeys = Arc::new(Hotkeys {
+            active: Mutex::new(Some(Hotkey::default())),
+            rejected: Hotkey::default(),
+        });
+        let state = Arc::new(SettingsState::new(AppSettings::default()));
+        let service = SettingsService::new(
+            repository.clone(),
+            hotkeys,
+            Arc::new(Startup(Mutex::new(false))),
+            state.clone(),
+        );
+
+        let snapshot = service.complete_onboarding().expect("complete onboarding");
+        assert!(snapshot.settings.onboarding_completed);
+        assert!(state.get().onboarding_completed);
+        assert_eq!(repository.saved.lock().expect("repository mutex").len(), 1);
+    }
+
+    #[test]
+    fn settings_ipc_rejects_unknown_fields_and_invalid_monitor_ids() {
+        assert!(
+            serde_json::from_str::<SettingsUpdate>(
+                r#"{
+                  "hotkey":"Ctrl+Shift+Q",
+                  "launchAtStartup":false,
+                  "autoOpenSafeUrls":true,
+                  "copyNonUrlPayloads":true,
+                  "notificationsEnabled":true,
+                  "scanMonitorId":null,
+                  "unexpected":true
+                }"#
+            )
+            .is_err()
+        );
+
+        let repository = Arc::new(Repository::default());
+        let hotkeys = Arc::new(Hotkeys {
+            active: Mutex::new(Some(Hotkey::default())),
+            rejected: Hotkey::default(),
+        });
+        let service = SettingsService::new(
+            repository.clone(),
+            hotkeys,
+            Arc::new(Startup(Mutex::new(false))),
+            Arc::new(SettingsState::new(AppSettings::default())),
+        );
+        let result = service.update(&SettingsUpdate {
+            hotkey: Hotkey::default().to_string(),
+            launch_at_startup: false,
+            auto_open_safe_urls: true,
+            copy_non_url_payloads: true,
+            notifications_enabled: true,
+            scan_monitor_id: Some("../machine-path".to_owned()),
+        });
+        assert!(matches!(result, Err(SettingsError::InvalidMonitor(_))));
+        assert!(
+            repository
+                .saved
+                .lock()
+                .expect("repository mutex")
+                .is_empty()
+        );
     }
 }

@@ -44,6 +44,11 @@ impl Hotkey {
         if !(control || alt || shift || super_key) {
             return Err(HotkeyParseError::ModifierRequired);
         }
+        if (!control && alt && !shift && !super_key && matches!(key, HotkeyKey::Function(4)))
+            || (!control && !alt && !shift && super_key && matches!(key, HotkeyKey::Letter('L')))
+        {
+            return Err(HotkeyParseError::ReservedCombination);
+        }
         Ok(Self {
             control,
             alt,
@@ -219,6 +224,9 @@ pub enum HotkeyParseError {
     /// The requested key is not in the supported portable subset.
     #[error("unsupported hotkey key: {0}")]
     UnsupportedKey(String),
+    /// The combination is reserved for an operating-system safety action.
+    #[error("the requested shortcut is reserved by Windows")]
+    ReservedCombination,
 }
 
 #[cfg(test)]
@@ -241,6 +249,14 @@ mod tests {
         assert_eq!(
             "Ctrl+Ctrl+Q".parse::<Hotkey>(),
             Err(HotkeyParseError::DuplicateModifier)
+        );
+        assert_eq!(
+            "Alt+F4".parse::<Hotkey>(),
+            Err(HotkeyParseError::ReservedCombination)
+        );
+        assert_eq!(
+            "Super+L".parse::<Hotkey>(),
+            Err(HotkeyParseError::ReservedCombination)
         );
     }
 

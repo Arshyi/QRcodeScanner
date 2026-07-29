@@ -3383,16 +3383,17 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "qrforge-application"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "qrforge-domain",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "qrforge-capture"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "qrforge-application",
  "qrforge-domain",
@@ -3401,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "qrforge-decoder"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "image",
  "qrforge-application",
@@ -3411,7 +3412,7 @@ dependencies = [
 
 [[package]]
 name = "qrforge-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "qrforge-application",
  "qrforge-capture",
@@ -3431,7 +3432,7 @@ dependencies = [
 
 [[package]]
 name = "qrforge-domain"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3441,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "qrforge-platform"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "qrforge-application",
@@ -3453,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "qrforge-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "qrforge-application",
  "qrforge-domain",

@@ -1,6 +1,6 @@
 use crate::{
-    BrowserPort, CapturePort, ClipboardPort, ClockPort, DecoderPort, Notification,
-    NotificationPort, SettingsState,
+    BrowserPort, CapturePort, ClassifiedResult, ClipboardPort, ClockPort, DecoderPort,
+    Notification, NotificationPort, SettingsState, results::classify_results,
 };
 use qrforge_domain::{Detection, PayloadClass, classify_payload};
 use serde::Serialize;
@@ -63,6 +63,12 @@ pub enum ScanOutcome {
     TextCopied,
     /// One URL-like payload with a blocked scheme was copied but not opened.
     BlockedPayloadCopied,
+    /// A blocked URL-like payload was detected but copying is disabled.
+    BlockedPayloadDetected,
+    /// Malformed HTTP-like text was copied but never opened.
+    MalformedTextCopied,
+    /// Malformed HTTP-like text was detected but copying is disabled.
+    MalformedTextDetected,
     /// Binary or disabled-copy content was left untouched.
     UnsupportedPayload,
     /// An adapter failed.
@@ -97,6 +103,9 @@ pub struct ScanReport {
     /// Optional capture metadata for diagnostics (monitor, scaling).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capture_metadata: Option<CaptureMetadata>,
+    /// Native-only result data published to the chooser for multi-code scans.
+    #[serde(skip)]
+    pub result_items: Vec<ClassifiedResult>,
 }
 
 /// Lightweight capture metadata for diagnostics (no pixel data).
@@ -144,15 +153,19 @@ impl ScanService {
         let started = self.ports.clock.now();
 
         let capture_started = self.ports.clock.now();
-        let Ok(frame) = self.ports.capture.capture_primary() else {
+        let requested_monitor = self.settings.get().scan_monitor_id;
+        let Ok(capture) = self.ports.capture.capture(requested_monitor.as_ref()) else {
             return self.failed(started, FailureStage::Capture);
         };
         let capture_ms = elapsed_ms(capture_started, self.ports.clock.now());
+        if capture.used_fallback {
+            self.feedback(Notification::SelectedMonitorUnavailable);
+        }
 
-        // Extract capture metadata for diagnostics (monitor, scaling, dimensions).
+        let frame = capture.frame;
         let capture_metadata = Some(CaptureMetadata {
-            monitor_label: frame.monitor_label().map(ToOwned::to_owned),
-            scale_factor_percent: frame.scale_factor_percent(),
+            monitor_label: Some(capture.monitor.label),
+            scale_factor_percent: Some(capture.monitor.scale_factor_percent),
             pixel_width: frame.width(),
             pixel_height: frame.height(),
         });
@@ -163,7 +176,7 @@ impl ScanService {
         };
         let decode_ms = elapsed_ms(decode_started, self.ports.clock.now());
         let detection_count = detections.len();
-        let outcome = self.apply_policy(&detections);
+        let (outcome, result_items) = self.apply_policy(&detections);
 
         ScanReport {
             outcome,
@@ -174,6 +187,7 @@ impl ScanService {
                 detection_count,
             },
             capture_metadata,
+            result_items,
         }
     }
 
@@ -185,19 +199,23 @@ impl ScanService {
             outcome: ScanOutcome::AlreadyInProgress,
             metrics: ScanMetrics::default(),
             capture_metadata: None,
+            result_items: Vec::new(),
         }
     }
 
-    fn apply_policy(&self, detections: &[Detection]) -> ScanOutcome {
+    fn apply_policy(&self, detections: &[Detection]) -> (ScanOutcome, Vec<ClassifiedResult>) {
         match detections {
             [] => {
                 self.feedback(Notification::NoQrFound);
-                ScanOutcome::NoCode
+                (ScanOutcome::NoCode, Vec::new())
             }
-            [detection] => self.apply_single_policy(detection),
+            [detection] => (self.apply_single_policy(detection), Vec::new()),
             many => {
                 self.feedback(Notification::MultipleQrFound(many.len()));
-                ScanOutcome::MultipleCodes { count: many.len() }
+                (
+                    ScanOutcome::MultipleCodes { count: many.len() },
+                    classify_results(many),
+                )
             }
         }
     }
@@ -207,7 +225,7 @@ impl ScanService {
         match classify_payload(&detection.raw_bytes) {
             PayloadClass::SafeUrl(url) if settings.auto_open_safe_urls => {
                 if self.ports.browser.open(&url).is_err() {
-                    self.feedback(Notification::ScanFailed);
+                    self.feedback(Notification::BrowserFailed);
                     return ScanOutcome::Failed {
                         stage: FailureStage::Browser,
                     };
@@ -221,7 +239,7 @@ impl ScanService {
             }
             PayloadClass::PlainText(text) if settings.copy_non_url_payloads => {
                 if self.ports.clipboard.set_text(&text).is_err() {
-                    self.feedback(Notification::ScanFailed);
+                    self.feedback(Notification::ClipboardFailed);
                     return ScanOutcome::Failed {
                         stage: FailureStage::Clipboard,
                     };
@@ -229,11 +247,21 @@ impl ScanService {
                 self.feedback(Notification::TextCopied);
                 ScanOutcome::TextCopied
             }
+            PayloadClass::MalformedUrl { text } if settings.copy_non_url_payloads => {
+                if self.ports.clipboard.set_text(&text).is_err() {
+                    self.feedback(Notification::ClipboardFailed);
+                    return ScanOutcome::Failed {
+                        stage: FailureStage::Clipboard,
+                    };
+                }
+                self.feedback(Notification::MalformedPayloadCopied);
+                ScanOutcome::MalformedTextCopied
+            }
             PayloadClass::BlockedScheme { text, .. } | PayloadClass::BlockedUrl { text }
                 if settings.copy_non_url_payloads =>
             {
                 if self.ports.clipboard.set_text(&text).is_err() {
-                    self.feedback(Notification::ScanFailed);
+                    self.feedback(Notification::ClipboardFailed);
                     return ScanOutcome::Failed {
                         stage: FailureStage::Clipboard,
                     };
@@ -241,11 +269,15 @@ impl ScanService {
                 self.feedback(Notification::BlockedPayloadCopied);
                 ScanOutcome::BlockedPayloadCopied
             }
-            PayloadClass::UnsafeText
-            | PayloadClass::PlainText(_)
-            | PayloadClass::BlockedScheme { .. }
-            | PayloadClass::BlockedUrl { .. }
-            | PayloadClass::Binary => {
+            PayloadClass::MalformedUrl { .. } => {
+                self.feedback(Notification::MalformedPayloadDetected);
+                ScanOutcome::MalformedTextDetected
+            }
+            PayloadClass::BlockedScheme { .. } | PayloadClass::BlockedUrl { .. } => {
+                self.feedback(Notification::BlockedPayloadDetected);
+                ScanOutcome::BlockedPayloadDetected
+            }
+            PayloadClass::UnsafeText | PayloadClass::PlainText(_) | PayloadClass::Binary => {
                 self.feedback(Notification::UnsupportedPayload);
                 ScanOutcome::UnsupportedPayload
             }
@@ -253,7 +285,12 @@ impl ScanService {
     }
 
     fn failed(&self, started: Duration, stage: FailureStage) -> ScanReport {
-        self.feedback(Notification::ScanFailed);
+        self.feedback(match stage {
+            FailureStage::Capture => Notification::CaptureFailed,
+            FailureStage::Decode => Notification::DecoderFailed,
+            FailureStage::Browser => Notification::BrowserFailed,
+            FailureStage::Clipboard => Notification::ClipboardFailed,
+        });
         ScanReport {
             outcome: ScanOutcome::Failed { stage },
             metrics: ScanMetrics {
@@ -261,6 +298,7 @@ impl ScanService {
                 ..ScanMetrics::default()
             },
             capture_metadata: None,
+            result_items: Vec::new(),
         }
     }
 
@@ -286,8 +324,11 @@ fn elapsed_ms(start: Duration, end: Duration) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CaptureOutput;
     use crate::{PortError, SettingsState};
-    use qrforge_domain::{AppSettings, CapturedFrame, Point, QrFormat, SafeHttpUrl};
+    use qrforge_domain::{
+        AppSettings, CapturedFrame, MonitorId, MonitorInfo, Point, QrFormat, SafeHttpUrl,
+    };
     use std::sync::{Barrier, Mutex, mpsc};
 
     #[derive(Default)]
@@ -300,10 +341,33 @@ mod tests {
     struct FixedCapture;
 
     impl CapturePort for FixedCapture {
-        fn capture_primary(&self) -> Result<CapturedFrame, PortError> {
-            CapturedFrame::rgba8(1, 1, vec![255; 4])
-                .map_err(|error| PortError::new("capture", error.to_string()))
+        fn monitors(&self) -> Result<Vec<MonitorInfo>, PortError> {
+            Ok(vec![test_monitor()])
         }
+
+        fn capture(&self, _requested: Option<&MonitorId>) -> Result<CaptureOutput, PortError> {
+            Ok(CaptureOutput {
+                frame: CapturedFrame::rgba8(1, 1, vec![255; 4])
+                    .map_err(|error| PortError::new("capture", error.to_string()))?,
+                monitor: test_monitor(),
+                used_fallback: false,
+            })
+        }
+    }
+
+    fn test_monitor() -> MonitorInfo {
+        MonitorInfo::new(
+            "display-test".parse().expect("monitor id"),
+            "Test display".to_owned(),
+            0,
+            0,
+            1,
+            1,
+            100,
+            0,
+            true,
+        )
+        .expect("monitor")
     }
 
     struct FixedDecoder(Vec<Detection>);
@@ -488,19 +552,159 @@ mod tests {
         );
     }
 
+    struct FallbackCapture;
+
+    impl CapturePort for FallbackCapture {
+        fn monitors(&self) -> Result<Vec<MonitorInfo>, PortError> {
+            Ok(vec![test_monitor()])
+        }
+
+        fn capture(&self, requested: Option<&MonitorId>) -> Result<CaptureOutput, PortError> {
+            assert_eq!(
+                requested.map(MonitorId::as_str),
+                Some("disconnected-display")
+            );
+            Ok(CaptureOutput {
+                frame: CapturedFrame::rgba8(1, 1, vec![255; 4])
+                    .map_err(|error| PortError::new("capture", error.to_string()))?,
+                monitor: test_monitor(),
+                used_fallback: true,
+            })
+        }
+    }
+
+    #[test]
+    fn disconnected_monitor_falls_back_with_explicit_feedback_and_metadata() {
+        let calls = Arc::new(Calls::default());
+        let scan = ScanService::new(
+            ScanPorts {
+                capture: Arc::new(FallbackCapture),
+                decoder: Arc::new(FixedDecoder(Vec::new())),
+                browser: calls.clone(),
+                clipboard: calls.clone(),
+                notifications: calls.clone(),
+                clock: Arc::new(StepClock(Mutex::new(Duration::ZERO))),
+            },
+            Arc::new(SettingsState::new(AppSettings {
+                scan_monitor_id: Some("disconnected-display".parse().expect("monitor id")),
+                ..AppSettings::default()
+            })),
+        );
+
+        let report = scan.scan();
+        assert_eq!(report.outcome, ScanOutcome::NoCode);
+        assert_eq!(
+            report
+                .capture_metadata
+                .as_ref()
+                .and_then(|metadata| metadata.monitor_label.as_deref()),
+            Some("Test display")
+        );
+        assert_eq!(
+            calls
+                .notifications
+                .lock()
+                .expect("notifications mutex")
+                .as_slice(),
+            [
+                Notification::SelectedMonitorUnavailable,
+                Notification::NoQrFound
+            ]
+        );
+    }
+
+    struct FailingCapture;
+
+    impl CapturePort for FailingCapture {
+        fn monitors(&self) -> Result<Vec<MonitorInfo>, PortError> {
+            Ok(vec![test_monitor()])
+        }
+
+        fn capture(&self, _requested: Option<&MonitorId>) -> Result<CaptureOutput, PortError> {
+            Err(PortError::new(
+                "capture_selected_monitor",
+                "sensitive operating-system detail",
+            ))
+        }
+    }
+
+    struct FailingDecoder;
+
+    impl DecoderPort for FailingDecoder {
+        fn decode(&self, _frame: &CapturedFrame) -> Result<Vec<Detection>, PortError> {
+            Err(PortError::new(
+                "decode_qr",
+                "sensitive decoder implementation detail",
+            ))
+        }
+    }
+
+    #[test]
+    fn capture_and_decoder_failures_have_distinct_payload_free_feedback() {
+        for (capture, decoder, outcome, notification) in [
+            (
+                Arc::new(FailingCapture) as Arc<dyn CapturePort>,
+                Arc::new(FixedDecoder(Vec::new())) as Arc<dyn DecoderPort>,
+                ScanOutcome::Failed {
+                    stage: FailureStage::Capture,
+                },
+                Notification::CaptureFailed,
+            ),
+            (
+                Arc::new(FixedCapture) as Arc<dyn CapturePort>,
+                Arc::new(FailingDecoder) as Arc<dyn DecoderPort>,
+                ScanOutcome::Failed {
+                    stage: FailureStage::Decode,
+                },
+                Notification::DecoderFailed,
+            ),
+        ] {
+            let calls = Arc::new(Calls::default());
+            let scan = ScanService::new(
+                ScanPorts {
+                    capture,
+                    decoder,
+                    browser: calls.clone(),
+                    clipboard: calls.clone(),
+                    notifications: calls.clone(),
+                    clock: Arc::new(StepClock(Mutex::new(Duration::ZERO))),
+                },
+                Arc::new(SettingsState::new(AppSettings::default())),
+            );
+            let report = scan.scan();
+            assert_eq!(report.outcome, outcome);
+            assert_eq!(
+                calls
+                    .notifications
+                    .lock()
+                    .expect("notifications mutex")
+                    .as_slice(),
+                [notification]
+            );
+        }
+    }
+
     struct BlockingCapture {
         entered: Mutex<Option<mpsc::Sender<()>>>,
         release: Arc<Barrier>,
     }
 
     impl CapturePort for BlockingCapture {
-        fn capture_primary(&self) -> Result<CapturedFrame, PortError> {
+        fn monitors(&self) -> Result<Vec<MonitorInfo>, PortError> {
+            Ok(vec![test_monitor()])
+        }
+
+        fn capture(&self, _requested: Option<&MonitorId>) -> Result<CaptureOutput, PortError> {
             if let Some(sender) = self.entered.lock().expect("entered mutex").take() {
                 sender.send(()).expect("test receiver should remain");
             }
             self.release.wait();
-            CapturedFrame::rgba8(1, 1, vec![255; 4])
-                .map_err(|error| PortError::new("capture", error.to_string()))
+            Ok(CaptureOutput {
+                frame: CapturedFrame::rgba8(1, 1, vec![255; 4])
+                    .map_err(|error| PortError::new("capture", error.to_string()))?,
+                monitor: test_monitor(),
+                used_fallback: false,
+            })
         }
     }
 
@@ -605,10 +809,10 @@ mod tests {
     }
 
     #[test]
-    fn malformed_url_is_classified_as_plain_text() {
+    fn malformed_url_like_text_has_a_distinct_outcome() {
         let calls = Arc::new(Calls::default());
         let report = service(vec![detection(b"http:///missing-host")], calls.clone()).scan();
-        assert_eq!(report.outcome, ScanOutcome::TextCopied);
+        assert_eq!(report.outcome, ScanOutcome::MalformedTextCopied);
         assert!(calls.browser.lock().expect("browser mutex").is_empty());
         assert_eq!(
             calls.clipboard.lock().expect("clipboard mutex").as_slice(),

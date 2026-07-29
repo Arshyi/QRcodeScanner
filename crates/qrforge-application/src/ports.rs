@@ -1,4 +1,6 @@
-use qrforge_domain::{AppSettings, CapturedFrame, Detection, Hotkey, SafeHttpUrl};
+use qrforge_domain::{
+    AppSettings, CapturedFrame, Detection, Hotkey, MonitorId, MonitorInfo, SafeHttpUrl,
+};
 use std::{fmt, time::Duration};
 
 /// A sanitized adapter failure. Payload content must never be placed in this value.
@@ -33,10 +35,22 @@ impl fmt::Display for PortError {
 
 impl std::error::Error for PortError {}
 
-/// Captures the currently visible primary screen into memory.
+/// One selected-display capture plus non-sensitive selection metadata.
+pub struct CaptureOutput {
+    /// Native in-memory pixels.
+    pub frame: CapturedFrame,
+    /// Physical display that was captured.
+    pub monitor: MonitorInfo,
+    /// Whether a missing configured display required primary-display fallback.
+    pub used_fallback: bool,
+}
+
+/// Enumerates and captures physical displays without persisting pixels.
 pub trait CapturePort: Send + Sync {
-    /// Performs exactly one capture.
-    fn capture_primary(&self) -> Result<CapturedFrame, PortError>;
+    /// Returns the current native display topology.
+    fn monitors(&self) -> Result<Vec<MonitorInfo>, PortError>;
+    /// Performs exactly one full-display capture.
+    fn capture(&self, requested: Option<&MonitorId>) -> Result<CaptureOutput, PortError>;
 }
 
 /// Decodes QR-family symbols from a borrowed in-memory frame.
@@ -72,14 +86,28 @@ pub enum Notification {
     MultipleQrFound(usize),
     /// A previous scan still owns the single-scan lock.
     ScanAlreadyInProgress,
+    /// The configured display disappeared and the primary display was used.
+    SelectedMonitorUnavailable,
     /// The configured global hotkey could not be registered.
     HotkeyConflict,
     /// A binary or otherwise unsupported payload was detected.
     UnsupportedPayload,
     /// A safe URL was detected while automatic opening was disabled.
     SafeUrlNotOpened,
-    /// Capture, decode, browser, or clipboard work failed.
-    ScanFailed,
+    /// The selected display could not be captured.
+    CaptureFailed,
+    /// Captured pixels could not be decoded.
+    DecoderFailed,
+    /// A malformed HTTP-like payload was copied as inert text.
+    MalformedPayloadCopied,
+    /// A malformed HTTP-like payload was detected but not copied.
+    MalformedPayloadDetected,
+    /// A blocked payload was detected but not copied.
+    BlockedPayloadDetected,
+    /// Browser launch failed after Rust-side validation.
+    BrowserFailed,
+    /// Clipboard replacement failed.
+    ClipboardFailed,
 }
 
 /// Delivers native or tray feedback without including QR payloads.

@@ -1,8 +1,8 @@
-use crate::Hotkey;
+use crate::{Hotkey, MonitorId};
 use serde::{Deserialize, Serialize};
 
 /// Current on-disk settings schema version.
-pub const SETTINGS_SCHEMA_VERSION: u32 = 1;
+pub const SETTINGS_SCHEMA_VERSION: u32 = 2;
 
 /// Validated user settings shared by the host and typed IPC view.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -20,6 +20,10 @@ pub struct AppSettings {
     pub copy_non_url_payloads: bool,
     /// Whether native notifications and tray feedback are shown.
     pub notifications_enabled: bool,
+    /// Preferred physical display, or automatic primary-monitor selection.
+    pub scan_monitor_id: Option<MonitorId>,
+    /// Whether the dismissible local-processing introduction was completed.
+    pub onboarding_completed: bool,
 }
 
 impl Default for AppSettings {
@@ -31,6 +35,8 @@ impl Default for AppSettings {
             auto_open_safe_urls: true,
             copy_non_url_payloads: true,
             notifications_enabled: true,
+            scan_monitor_id: None,
+            onboarding_completed: false,
         }
     }
 }

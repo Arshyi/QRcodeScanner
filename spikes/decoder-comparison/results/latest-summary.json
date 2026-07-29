@@ -1,22 +1,20 @@
 {
-  "fixtures": 13,
+  "fixtures": 21,
   "iterations_per_fixture": 30,
   "identical_inputs": true,
+  "measured_on": "2026-07-29",
   "quircs": {
-    "categories_passed": 11,
-    "categories_total": 13,
-    "aggregate_latency_ms": { "median": 6.4273, "p95": 24.7074 },
-    "physical_memory_delta_mib": 5.7344,
-    "failures": ["inverted", "perspective_distorted"]
+    "categories_passed": 19,
+    "categories_total": 21,
+    "aggregate_latency_ms": { "median": 3.5644, "p95": 17.3704 },
+    "physical_memory_delta_mib": 0.1328,
+    "failures": ["inverted.png", "perspective.png"]
   },
   "zxing_cpp": {
-    "categories_passed": 12,
-    "categories_total": 13,
-    "aggregate_latency_ms": { "median": 4.1307, "p95": 22.1809 },
-    "physical_memory_delta_mib": 0.0,
-    "failures": ["perspective_distorted"],
-    "release_executable_bytes": 6497792
-  },
-  "pure_rust_baseline_release_executable_bytes": 314880
+    "categories_passed": 20,
+    "categories_total": 21,
+    "aggregate_latency_ms": { "median": 2.0115, "p95": 13.7658 },
+    "physical_memory_delta_mib": 0.3438,
+    "accepted_failures": ["perspective.png"]
+  }
 }
-

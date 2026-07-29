@@ -1,7 +1,7 @@
 //! Atomic, versioned JSON settings storage.
 
 use qrforge_application::{PortError, SettingsRepository};
-use qrforge_domain::{AppSettings, Hotkey, SETTINGS_SCHEMA_VERSION};
+use qrforge_domain::{AppSettings, Hotkey, MonitorId, SETTINGS_SCHEMA_VERSION};
 use serde_json::{Map, Value};
 use std::{
     fs,
@@ -101,6 +101,8 @@ fn parse_fields(object: &Map<String, Value>, version: u32) -> AppSettings {
     } else {
         "notificationsEnabled"
     };
+    let scan_monitor_id =
+        string_field(object, "scanMonitorId").and_then(|value| value.parse::<MonitorId>().ok());
     AppSettings {
         schema_version: SETTINGS_SCHEMA_VERSION,
         hotkey,
@@ -115,6 +117,9 @@ fn parse_fields(object: &Map<String, Value>, version: u32) -> AppSettings {
         notifications_enabled: bool_field(object, notifications_key)
             .or_else(|| bool_field(object, "notificationsEnabled"))
             .unwrap_or(defaults.notifications_enabled),
+        scan_monitor_id,
+        onboarding_completed: bool_field(object, "onboardingCompleted")
+            .unwrap_or(defaults.onboarding_completed),
     }
 }
 
@@ -143,7 +148,9 @@ mod tests {
               "launchAtStartup": true,
               "autoOpenSafeUrls": "yes",
               "copyNonUrlPayloads": false,
-              "notificationsEnabled": 3
+              "notificationsEnabled": 3,
+              "scanMonitorId": "../invalid",
+              "onboardingCompleted": true
             }"#,
         )
         .expect("write fixture");
@@ -155,6 +162,8 @@ mod tests {
         assert!(loaded.auto_open_safe_urls);
         assert!(!loaded.copy_non_url_payloads);
         assert!(loaded.notifications_enabled);
+        assert_eq!(loaded.scan_monitor_id, None);
+        assert!(loaded.onboarding_completed);
     }
 
     #[test]
@@ -180,6 +189,8 @@ mod tests {
             .expect("parse migrated file");
         assert_eq!(rewritten["schemaVersion"], SETTINGS_SCHEMA_VERSION);
         assert_eq!(rewritten["copyNonUrlPayloads"], false);
+        assert_eq!(rewritten["scanMonitorId"], Value::Null);
+        assert_eq!(rewritten["onboardingCompleted"], false);
     }
 
     #[test]
@@ -227,5 +238,32 @@ mod tests {
             fs::read(path).expect("corrupt source remains available"),
             b"{ definitely not json"
         );
+    }
+
+    #[test]
+    fn migrates_schema_one_monitor_and_onboarding_defaults() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("settings.json");
+        fs::write(
+            &path,
+            r#"{
+              "schemaVersion": 1,
+              "hotkey": "Ctrl+Shift+Q",
+              "launchAtStartup": false,
+              "autoOpenSafeUrls": true,
+              "copyNonUrlPayloads": true,
+              "notificationsEnabled": true
+            }"#,
+        )
+        .expect("write schema one");
+        let repository = FileSettingsRepository::new(path.clone());
+
+        let loaded = repository.load().expect("migrate schema one");
+        assert_eq!(loaded.scan_monitor_id, None);
+        assert!(!loaded.onboarding_completed);
+        let rewritten: Value =
+            serde_json::from_slice(&fs::read(path).expect("read migrated settings"))
+                .expect("parse migrated settings");
+        assert_eq!(rewritten["schemaVersion"], SETTINGS_SCHEMA_VERSION);
     }
 }

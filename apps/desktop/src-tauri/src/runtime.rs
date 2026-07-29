@@ -1,5 +1,7 @@
-use crate::diagnostics::Diagnostics;
-use qrforge_application::{NotificationPort, ScanService, SettingsService};
+use crate::{diagnostics::Diagnostics, tray, window};
+use qrforge_application::{
+    CapturePort, NotificationPort, ResultService, ScanService, SettingsService,
+};
 use std::{
     sync::{
         Arc,
@@ -7,6 +9,7 @@ use std::{
     },
     time::Instant,
 };
+use tauri::{AppHandle, Wry};
 
 /// Application services retained by the native tray host.
 pub struct RuntimeState {
@@ -14,6 +17,10 @@ pub struct RuntimeState {
     pub scans: Arc<ScanDispatcher>,
     /// Transactional settings use case.
     pub settings: Arc<SettingsService>,
+    /// Current physical display enumeration and capture adapter.
+    pub capture: Arc<dyn CapturePort>,
+    /// Pending multi-code result policy and native actions.
+    pub results: Arc<ResultService>,
     /// Native/tray feedback adapter.
     pub notifications: Arc<dyn NotificationPort>,
     /// Opt-in local diagnostics recorder used by window lifecycle events.
@@ -24,16 +31,25 @@ pub struct RuntimeState {
 pub struct ScanDispatcher {
     scan: Arc<ScanService>,
     diagnostics: Arc<Diagnostics>,
+    results: Arc<ResultService>,
+    app: AppHandle<Wry>,
     worker: WorkerGate,
 }
 
 impl ScanDispatcher {
     /// Creates a dispatcher for a one-shot scan service.
     #[must_use]
-    pub fn new(scan: Arc<ScanService>, diagnostics: Arc<Diagnostics>) -> Self {
+    pub fn new(
+        scan: Arc<ScanService>,
+        diagnostics: Arc<Diagnostics>,
+        results: Arc<ResultService>,
+        app: AppHandle<Wry>,
+    ) -> Self {
         Self {
             scan,
             diagnostics,
+            results,
+            app,
             worker: WorkerGate::default(),
         }
     }
@@ -43,6 +59,7 @@ impl ScanDispatcher {
     /// Duplicate activation is rejected without creating another OS thread.
     pub fn spawn(self: &Arc<Self>, trigger: &'static str) {
         let triggered = Instant::now();
+        let _ = tray::show_scan_started(&self.app);
         let Some(permit) = self.worker.try_acquire() else {
             let report = self.scan.already_in_progress();
             self.diagnostics
@@ -52,7 +69,13 @@ impl ScanDispatcher {
         let dispatcher = self.clone();
         std::thread::spawn(move || {
             let _permit = permit;
-            let report = dispatcher.scan.scan();
+            let mut report = dispatcher.scan.scan();
+            if !report.result_items.is_empty() {
+                dispatcher
+                    .results
+                    .publish(std::mem::take(&mut report.result_items));
+                let _ = window::open_results(&dispatcher.app);
+            }
             dispatcher
                 .diagnostics
                 .record_scan(trigger, triggered.elapsed(), &report);
