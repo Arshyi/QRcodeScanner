@@ -74,6 +74,9 @@ fn message(notification: Notification) -> String {
             format!("Found {count} QR codes; no automatic action taken")
         }
         Notification::ScanAlreadyInProgress => "A scan is already in progress".to_owned(),
+        Notification::SelectedMonitorUnavailable => {
+            "Saved display unavailable; scanned the primary display".to_owned()
+        }
         Notification::HotkeyConflict => {
             "The scan hotkey is unavailable; choose another in Settings".to_owned()
         }
@@ -83,6 +86,18 @@ fn message(notification: Notification) -> String {
         Notification::SafeUrlNotOpened => {
             "A safe link was found; automatic opening is disabled".to_owned()
         }
-        Notification::ScanFailed => "The scan could not be completed".to_owned(),
+        Notification::CaptureFailed => "The selected display could not be captured".to_owned(),
+        Notification::DecoderFailed => "The captured screen could not be decoded".to_owned(),
+        Notification::MalformedPayloadCopied => {
+            "Malformed link-like text copied; nothing was opened".to_owned()
+        }
+        Notification::MalformedPayloadDetected => {
+            "Malformed link-like text found; copying is disabled".to_owned()
+        }
+        Notification::BlockedPayloadDetected => {
+            "Blocked link type found; nothing was opened".to_owned()
+        }
+        Notification::BrowserFailed => "Windows could not open the approved link".to_owned(),
+        Notification::ClipboardFailed => "Windows could not update the clipboard".to_owned(),
     }
 }

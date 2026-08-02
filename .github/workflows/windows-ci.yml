@@ -1,0 +1,94 @@
+name: Windows validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: always
+      CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\msvc-runtime.cmake
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            spikes -> spikes/target
+
+      - name: Rust formatting
+        run: |
+          cargo fmt --all --check
+          cargo fmt --manifest-path spikes/Cargo.toml --all --check
+
+      - name: Rust workspace check
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Rust workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Strict Rust lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Spike workspace validation
+        run: |
+          cargo check --manifest-path spikes/Cargo.toml --workspace --all-targets --locked
+          cargo test --manifest-path spikes/Cargo.toml --workspace --locked
+          cargo clippy --manifest-path spikes/Cargo.toml --workspace --all-targets --locked -- -D warnings
+
+      - name: Frontend clean install
+        working-directory: apps/desktop
+        run: npm ci --no-audit --fund=false
+
+      - name: Frontend validation
+        working-directory: apps/desktop
+        run: |
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Production fixture benchmark
+        run: |
+          $env:QRFORGE_REPORT_PATH = "${{ github.workspace }}\target\ci\decoder-summary.json"
+          cargo run --release --manifest-path spikes/decoder-comparison/Cargo.toml --locked --bin qrforge-decoder-comparison
+
+      - name: Release workspace and native ZXing build
+        run: |
+          cargo build --release --workspace --locked
+          cargo build --release --manifest-path spikes/Cargo.toml --workspace --locked
+
+      - name: Tauri production and NSIS bundle
+        working-directory: apps/desktop
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Upload validation artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: QRForge-Windows-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/release/bundle/nsis/*-setup.exe
+            target/ci/decoder-summary.json

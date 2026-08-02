@@ -2,7 +2,7 @@
 
 ## Supported host
 
-Phase 1 targets 64-bit Windows 10 or newer. Development requires:
+Phase 1.1 targets 64-bit Windows 10 or newer. Development requires:
 
 - current stable Rust installed through Rustup; the workspace minimum is Rust
   1.85
@@ -57,6 +57,11 @@ A clean-enough verification can use a separate target directory:
 $env:CARGO_TARGET_DIR = 'target\phase1-validation'
 cargo test --workspace
 cargo build --release --workspace
+
+cargo fmt --manifest-path spikes\Cargo.toml --all --check
+cargo check --manifest-path spikes\Cargo.toml --workspace --all-targets
+cargo test --manifest-path spikes\Cargo.toml --workspace
+cargo clippy --manifest-path spikes\Cargo.toml --workspace --all-targets -- -D warnings
 ```
 
 Inspect the resulting ZXing CMake cache and confirm:
@@ -110,7 +115,7 @@ Release signing is not configured in Phase 1, so a successful local bundle is
 an unsigned test installer.
 
 Current measured Release timings, process counts, memory, artifact hashes, and
-installer validation are recorded in `docs/phase-1-results.md`.
+installer validation are recorded in `docs/phase-1-1-results.md`.
 
 ## Manual Windows release checklist
 
@@ -124,7 +129,8 @@ Use a Release build and record actual evidence in `docs/phase-1-results.md`.
    and registered hotkey remain.
 5. Reopen Settings and confirm the saved hotkey and options are correct.
 6. Display the checked-in fixtures and exercise normal, inverted, Unicode,
-   multiple-code, malformed URL-like, no-code, and dangerous-scheme cases.
+   multiple-code chooser, malformed URL-like, no-code, dangerous-scheme, and
+   transformed screen cases.
 7. Trigger the hotkey repeatedly during a scan and confirm only one capture
    worker runs and the duplicate request receives feedback.
 8. Repeat at least ten settings create/destroy cycles and ten scans; compare
@@ -132,6 +138,13 @@ Use a Release build and record actual evidence in `docs/phase-1-results.md`.
 9. Search the application data directory and repository for newly created
    image/frame files. Only settings and explicitly enabled diagnostics should
    be written.
+10. On a multi-monitor host, change the selected display, unplug it, and
+    confirm the primary fallback and reconnect/refresh behavior.
+
+GitHub-hosted Windows CI runs the supported non-interactive subset from
+`.github\workflows\windows-ci.yml`. Global-hotkey, tray, notification,
+real-display topology, screen-reader, and installer-interaction checks remain
+documented manual Windows validation.
 
 ## Local application data
 

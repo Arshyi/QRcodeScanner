@@ -19,6 +19,14 @@ impl SafeHttpUrl {
     pub fn identity(&self) -> &str {
         &self.identity
     }
+
+    /// Returns the validated lowercase HTTP-family scheme.
+    #[must_use]
+    pub fn scheme(&self) -> &str {
+        self.normalized
+            .split_once(':')
+            .map_or("", |(scheme, _)| scheme)
+    }
 }
 
 /// Security classification for untrusted decoded payload bytes.
@@ -28,6 +36,12 @@ pub enum PayloadClass {
     SafeUrl(SafeHttpUrl),
     /// Valid UTF-8 that is not syntactically a URL.
     PlainText(String),
+    /// Text that looks like an HTTP(S) URL but is malformed and cannot be
+    /// opened safely.
+    MalformedUrl {
+        /// Original inert text, retained only for optional clipboard copying.
+        text: String,
+    },
     /// A syntactically valid URL with a scheme QRForge never launches.
     BlockedScheme {
         /// Lowercase parsed scheme.
@@ -62,7 +76,15 @@ pub fn classify_payload(payload: &[u8]) -> PayloadClass {
         return PayloadClass::PlainText(text.to_owned());
     }
 
+    let looks_http_like = text.split_once(':').is_some_and(|(scheme, _)| {
+        scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+    });
     let Ok(mut parsed) = Url::parse(text) else {
+        if looks_http_like {
+            return PayloadClass::MalformedUrl {
+                text: text.to_owned(),
+            };
+        }
         return PayloadClass::PlainText(text.to_owned());
     };
     let scheme = parsed.scheme().to_ascii_lowercase();
@@ -81,6 +103,11 @@ pub fn classify_payload(payload: &[u8]) -> PayloadClass {
         || parsed.cannot_be_a_base()
         || parsed.host_str().is_none()
     {
+        if looks_http_like {
+            return PayloadClass::MalformedUrl {
+                text: text.to_owned(),
+            };
+        }
         return PayloadClass::PlainText(text.to_owned());
     }
     let has_credentials = !parsed.username().is_empty() || parsed.password().is_some();
@@ -115,11 +142,11 @@ mod tests {
         assert_eq!(url.identity(), "https://example.com/a");
         assert!(matches!(
             classify_payload(b"http:///missing-host"),
-            PayloadClass::PlainText(_)
+            PayloadClass::MalformedUrl { .. }
         ));
         assert!(matches!(
             classify_payload(b"https://[invalid"),
-            PayloadClass::PlainText(_)
+            PayloadClass::MalformedUrl { .. }
         ));
     }
 
@@ -168,6 +195,18 @@ mod tests {
             PayloadClass::PlainText("hello from QRForge".to_owned())
         );
         assert_eq!(classify_payload(&[0xff, 0xfe]), PayloadClass::Binary);
+    }
+
+    #[test]
+    fn distinguishes_malformed_http_like_text_from_plain_text() {
+        assert!(matches!(
+            classify_payload(b"https://[invalid"),
+            PayloadClass::MalformedUrl { .. }
+        ));
+        assert_eq!(
+            classify_payload(b"not a link"),
+            PayloadClass::PlainText("not a link".to_owned())
+        );
     }
 
     #[test]

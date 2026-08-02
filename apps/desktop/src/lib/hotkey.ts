@@ -25,6 +25,12 @@ export function hotkeyFromKeyboard(event: KeyboardEvent): string | null {
   if (parts.length === 0) {
     return null;
   }
+  if (
+    (parts.length === 1 && parts[0] === 'Alt' && key === 'F4') ||
+    (parts.length === 1 && parts[0] === 'Super' && key === 'L')
+  ) {
+    return null;
+  }
   parts.push(key);
   return parts.join('+');
 }

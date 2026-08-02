@@ -141,4 +141,32 @@ mod tests {
             assert_eq!(results[0].raw_bytes, expected);
         }
     }
+
+    #[test]
+    fn regression_transformed_screen_fixtures_preserve_payloads() {
+        for (name, expected) in [
+            ("rotated.png", b"rotated-90-degrees".as_slice()),
+            ("low-contrast.png", b"low-contrast-code".as_slice()),
+            ("blurred.png", b"blurred-code".as_slice()),
+            ("damaged.png", b"partially-damaged-code".as_slice()),
+            ("downscaled.png", b"downscaled-screen-code".as_slice()),
+            (
+                "browser-rendered.png",
+                b"https://example.com/browser-rendered".as_slice(),
+            ),
+            (
+                "screenshot-compressed.png",
+                b"screenshot-compressed-code".as_slice(),
+            ),
+            ("colored.png", b"colored-foreground-background".as_slice()),
+            ("high-dpi.png", b"high-dpi-rendering-200-percent".as_slice()),
+            ("dense-ui.png", b"dense-ui-background-code".as_slice()),
+        ] {
+            let results = ZxingDecoder
+                .decode(&fixture(name))
+                .expect("decode transformed fixture");
+            assert_eq!(results.len(), 1, "fixture {name}");
+            assert_eq!(results[0].raw_bytes, expected, "fixture {name}");
+        }
+    }
 }

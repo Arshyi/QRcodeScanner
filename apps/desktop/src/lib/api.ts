@@ -7,6 +7,20 @@ export interface AppSettings {
   autoOpenSafeUrls: boolean;
   copyNonUrlPayloads: boolean;
   notificationsEnabled: boolean;
+  scanMonitorId: string | null;
+  onboardingCompleted: boolean;
+}
+
+export interface MonitorInfo {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scaleFactorPercent: number;
+  rotationDegrees: number;
+  isPrimary: boolean;
 }
 
 export interface SettingsSnapshot {
@@ -19,6 +33,9 @@ export interface SettingsView {
   snapshot: SettingsSnapshot;
   version: string;
   build: string;
+  monitors: MonitorInfo[];
+  configuredMonitorAvailable: boolean;
+  monitorError: string | null;
 }
 
 export interface SettingsUpdate {
@@ -27,6 +44,44 @@ export interface SettingsUpdate {
   autoOpenSafeUrls: boolean;
   copyNonUrlPayloads: boolean;
   notificationsEnabled: boolean;
+  scanMonitorId: string | null;
+}
+
+export type ResultKind =
+  | 'http_url'
+  | 'https_url'
+  | 'plain_text'
+  | 'malformed_url'
+  | 'blocked_scheme'
+  | 'blocked_url'
+  | 'unsafe_text'
+  | 'binary';
+
+export interface ResultItemView {
+  index: number;
+  kind: ResultKind;
+  preview: string;
+  detail: string | null;
+  canOpen: boolean;
+  canCopy: boolean;
+}
+
+export interface PendingResultsView {
+  sessionId: number;
+  items: ResultItemView[];
+}
+
+export type ResultAction = 'open' | 'copy' | 'copy_all' | 'dismiss';
+
+export interface ResultActionRequest {
+  sessionId: number;
+  action: ResultAction;
+  index: number | null;
+}
+
+export interface ResultActionOutcome {
+  message: string;
+  close: boolean;
 }
 
 export interface CommandError {
@@ -40,6 +95,18 @@ export function getSettings(): Promise<SettingsView> {
 
 export function updateSettings(request: SettingsUpdate): Promise<SettingsView> {
   return invoke<SettingsView>('update_settings', { request });
+}
+
+export function completeOnboarding(): Promise<SettingsView> {
+  return invoke<SettingsView>('complete_onboarding');
+}
+
+export function getPendingResults(): Promise<PendingResultsView> {
+  return invoke<PendingResultsView>('get_pending_results');
+}
+
+export function performResultAction(request: ResultActionRequest): Promise<ResultActionOutcome> {
+  return invoke<ResultActionOutcome>('perform_result_action', { request });
 }
 
 export function commandMessage(error: unknown): string {

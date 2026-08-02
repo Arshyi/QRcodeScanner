@@ -29,9 +29,9 @@ native capture -> native decoder -> Rust safety policy
 | Threat | Required control |
 |---|---|
 | Dangerous URL schemes or command-like text | Parse in Rust; auto-open only HTTP(S); never invoke a shell |
-| Homograph or credential-bearing URL | Phase 1 blocks IDN/punycode hosts and embedded credentials from auto-open; a future chooser may show a normalized host and require confirmation |
+| Homograph or credential-bearing URL | Block IDN/punycode hosts and embedded credentials from opening; the chooser labels them as blocked and exposes no Open action |
 | Repeated detections during scrolling | Cooldown, stable-detection rule, bounded queue, tab cap, emergency stop |
-| Multiple URLs in one frame | Phase 1 performs no automatic action; a future result chooser must require an explicit selection |
+| Multiple URLs in one frame | Perform no automatic action; retain native classified values behind an opaque session and require an explicit chooser action |
 | Webview compromise | Strict CSP, no remote content, per-window capabilities, typed validated commands |
 | Retained screen/camera data | Reusable memory-only buffers, redacted logs, no screenshot history |
 | Camera remains active | Explicit visible session, cancellation on close/suspend, OS permission flow |
@@ -47,6 +47,7 @@ native capture -> native decoder -> Rust safety policy
 - Full payloads are excluded from logs and crash metadata.
 - History is disclosed, configurable, and clearable.
 - Browser launch occurs only after Rust-side parsing and policy evaluation.
+- Multi-result previews are bounded inert text; action-capable URL values remain native-side.
 
 ## Residual risks
 

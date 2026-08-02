@@ -56,6 +56,20 @@ pub fn refresh_idle_tooltip(app: &AppHandle<Wry>) -> tauri::Result<()> {
     )
 }
 
+/// Shows transient payload-free progress without creating a native toast.
+pub fn show_scan_started(app: &AppHandle<Wry>) -> tauri::Result<()> {
+    app.tray_by_id("main-tray").map_or_else(
+        || Err(tauri::Error::AssetNotFound("main-tray".to_owned())),
+        |tray| tray.set_tooltip(Some("QRForge — scanning selected display…")),
+    )?;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        let _ = refresh_idle_tooltip(&app);
+    });
+    Ok(())
+}
+
 fn idle_tooltip(active_hotkey: Option<&str>) -> String {
     active_hotkey.map_or_else(
         || "QRForge — configure hotkey in Settings".to_owned(),

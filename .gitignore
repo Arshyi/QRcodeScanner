@@ -1,7 +1,7 @@
 /target/
 **/target/
 **/node_modules/
+apps/desktop/dist/
 *.pdb
 *.log
 .DS_Store
-

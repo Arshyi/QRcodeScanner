@@ -24,4 +24,13 @@ describe('hotkeyFromKeyboard', () => {
       hotkeyFromKeyboard(new KeyboardEvent('keydown', { code: 'ControlLeft', ctrlKey: true })),
     ).toBeNull();
   });
+
+  it('rejects reserved Windows safety shortcuts', () => {
+    expect(
+      hotkeyFromKeyboard(new KeyboardEvent('keydown', { code: 'F4', altKey: true })),
+    ).toBeNull();
+    expect(
+      hotkeyFromKeyboard(new KeyboardEvent('keydown', { code: 'KeyL', metaKey: true })),
+    ).toBeNull();
+  });
 });

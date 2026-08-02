@@ -1,5 +1,9 @@
 use crate::runtime::RuntimeState;
-use qrforge_application::{Notification, SettingsError, SettingsSnapshot, SettingsUpdate};
+use qrforge_application::{
+    Notification, PendingResultsView, ResultActionError, ResultActionOutcome, ResultActionRequest,
+    SettingsError, SettingsSnapshot, SettingsUpdate,
+};
+use qrforge_domain::MonitorInfo;
 use serde::Serialize;
 use tauri::{AppHandle, State, Wry};
 
@@ -13,6 +17,12 @@ pub struct SettingsView {
     pub version: &'static str,
     /// Compile-time target identifier.
     pub build: String,
+    /// Current native display topology.
+    pub monitors: Vec<MonitorInfo>,
+    /// Whether the configured display is present in the current topology.
+    pub configured_monitor_available: bool,
+    /// User-safe display enumeration error, if any.
+    pub monitor_error: Option<&'static str>,
 }
 
 /// Sanitized typed IPC error.
@@ -32,7 +42,7 @@ pub struct CommandError {
 // would break the IPC deserializer.
 #[allow(clippy::needless_pass_by_value)]
 pub fn get_settings(state: State<'_, RuntimeState>) -> SettingsView {
-    view(state.settings.snapshot())
+    view(&state, state.settings.snapshot())
 }
 
 /// Applies a complete typed settings update transactionally.
@@ -48,11 +58,15 @@ pub fn update_settings(
     match state.settings.update(&request) {
         Ok(snapshot) => {
             let _ = crate::tray::refresh_idle_tooltip(&app);
-            Ok(view(snapshot))
+            Ok(view(&state, snapshot))
         }
         Err(SettingsError::InvalidHotkey(_)) => Err(CommandError {
             code: "invalid_hotkey",
-            message: "Use at least one modifier and one letter, digit, or F-key.",
+            message: "Use a non-reserved shortcut with a modifier and one letter, digit, or F-key.",
+        }),
+        Err(SettingsError::InvalidMonitor(_)) => Err(CommandError {
+            code: "invalid_monitor",
+            message: "That display selection is invalid. Refresh the display list and try again.",
         }),
         Err(SettingsError::HotkeyRegistration(_)) => {
             let _ = state.notifications.notify(Notification::HotkeyConflict);
@@ -68,10 +82,117 @@ pub fn update_settings(
     }
 }
 
-fn view(snapshot: SettingsSnapshot) -> SettingsView {
+/// Marks the first-run local-processing introduction as complete.
+#[tauri::command]
+// Managed state is injected by Tauri as an owned command argument.
+#[allow(clippy::needless_pass_by_value)]
+pub fn complete_onboarding(state: State<'_, RuntimeState>) -> Result<SettingsView, CommandError> {
+    state
+        .settings
+        .complete_onboarding()
+        .map(|snapshot| view(&state, snapshot))
+        .map_err(|_| CommandError {
+            code: "onboarding_save_failed",
+            message: "QRForge could not save first-run completion. Please try again.",
+        })
+}
+
+/// Returns the current native multi-code chooser session.
+#[tauri::command]
+// Managed state is injected by Tauri as an owned command argument.
+#[allow(clippy::needless_pass_by_value)]
+pub fn get_pending_results(
+    state: State<'_, RuntimeState>,
+) -> Result<PendingResultsView, CommandError> {
+    state.results.snapshot().ok_or(CommandError {
+        code: "results_unavailable",
+        message: "These scan results are no longer available. Scan again to refresh them.",
+    })
+}
+
+/// Performs an explicit Rust-side open, copy, copy-all, or dismiss action.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn perform_result_action(
+    request: ResultActionRequest,
+    state: State<'_, RuntimeState>,
+    app: AppHandle<Wry>,
+) -> Result<ResultActionOutcome, CommandError> {
+    let outcome = state
+        .results
+        .perform(&request)
+        .map_err(|error| result_error(&error))?;
+    if outcome.close {
+        let _ = crate::window::close_results(&app);
+    }
+    Ok(outcome)
+}
+
+fn result_error(error: &ResultActionError) -> CommandError {
+    match error {
+        ResultActionError::StaleSession => CommandError {
+            code: "stale_results",
+            message: "These results were replaced or dismissed. Scan again to continue.",
+        },
+        ResultActionError::InvalidRequest | ResultActionError::InvalidIndex => CommandError {
+            code: "invalid_result_action",
+            message: "The requested result action was invalid.",
+        },
+        ResultActionError::NotOpenable => CommandError {
+            code: "result_not_openable",
+            message: "Rust safety policy does not allow this result to be opened.",
+        },
+        ResultActionError::NotCopyable => CommandError {
+            code: "result_not_copyable",
+            message: "This result cannot be copied safely.",
+        },
+        ResultActionError::Browser(_) => CommandError {
+            code: "browser_failed",
+            message: "Windows could not open the approved link.",
+        },
+        ResultActionError::Clipboard(_) => CommandError {
+            code: "clipboard_failed",
+            message: "Windows could not update the clipboard.",
+        },
+    }
+}
+
+fn view(state: &RuntimeState, snapshot: SettingsSnapshot) -> SettingsView {
+    let (monitors, monitor_error) = state.capture.monitors().map_or_else(
+        |_| (Vec::new(), Some("Displays could not be refreshed.")),
+        |monitors| (monitors, None),
+    );
+    let configured_monitor_available = snapshot
+        .settings
+        .scan_monitor_id
+        .as_ref()
+        .is_none_or(|id| monitors.iter().any(|monitor| &monitor.id == id));
     SettingsView {
         snapshot,
         version: env!("CARGO_PKG_VERSION"),
         build: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        monitors,
+        configured_monitor_available,
+        monitor_error,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qrforge_application::PortError;
+
+    #[test]
+    fn result_errors_are_sanitized_before_crossing_ipc() {
+        let secret = "private payload and C:\\Users\\name\\machine-path";
+        for error in [
+            ResultActionError::Browser(PortError::new("browser", secret)),
+            ResultActionError::Clipboard(PortError::new("clipboard", secret)),
+        ] {
+            let safe = result_error(&error);
+            assert!(!safe.message.contains(secret));
+            assert!(!safe.message.contains("C:\\"));
+            assert!(matches!(safe.code, "browser_failed" | "clipboard_failed"));
+        }
     }
 }
