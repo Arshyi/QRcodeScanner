@@ -1,7 +1,7 @@
 # Phase 1.1 completion report
 
 - Audit date: 2026-07-29
-- Repository: `C:\Users\DELL\Desktop\QRcodeScanner`
+- Repository: QRForge repository root
 - Starting branch: `main`
 - Starting commit: `5012322fc1d7691809251e0f616774d72bf840fe`
 - Working branch: `feat/phase-1-1-scan-experience`
@@ -317,7 +317,7 @@ remain a release-candidate hardware matrix item.
 ## Installer
 
 - Path:
-  `C:\Users\DELL\Desktop\QRcodeScanner\target\release\bundle\nsis\QRForge_0.1.1_x64-setup.exe`
+  `target\release\bundle\nsis\QRForge_0.1.1_x64-setup.exe`
 - Signing: unsigned development/test bundle
 - Size: 2,234,731 bytes
 - SHA-256:
