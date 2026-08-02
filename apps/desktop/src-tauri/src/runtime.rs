@@ -71,15 +71,29 @@ impl ScanDispatcher {
             let _permit = permit;
             let mut report = dispatcher.scan.scan();
             if !report.result_items.is_empty() {
-                dispatcher
+                let pending = dispatcher
                     .results
                     .publish(std::mem::take(&mut report.result_items));
-                let _ = window::open_results(&dispatcher.app);
+                clear_results_if_chooser_unavailable(
+                    &dispatcher.results,
+                    pending.session_id,
+                    window::open_results(&dispatcher.app).is_ok(),
+                );
             }
             dispatcher
                 .diagnostics
                 .record_scan(trigger, triggered.elapsed(), &report);
         });
+    }
+}
+
+fn clear_results_if_chooser_unavailable(
+    results: &ResultService,
+    session_id: u64,
+    chooser_available: bool,
+) {
+    if !chooser_available {
+        results.clear(Some(session_id));
     }
 }
 
@@ -105,7 +119,24 @@ impl Drop for WorkerPermit {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkerGate;
+    use super::{WorkerGate, clear_results_if_chooser_unavailable};
+    use qrforge_application::{BrowserPort, ClipboardPort, PortError, ResultService};
+    use qrforge_domain::SafeHttpUrl;
+    use std::sync::Arc;
+
+    struct UnusedSystemPort;
+
+    impl BrowserPort for UnusedSystemPort {
+        fn open(&self, _url: &SafeHttpUrl) -> Result<(), PortError> {
+            unreachable!("lifecycle test does not open URLs")
+        }
+    }
+
+    impl ClipboardPort for UnusedSystemPort {
+        fn set_text(&self, _text: &str) -> Result<(), PortError> {
+            unreachable!("lifecycle test does not use the clipboard")
+        }
+    }
 
     #[test]
     fn worker_gate_never_admits_overlapping_workers() {
@@ -114,5 +145,22 @@ mod tests {
         assert!(gate.try_acquire().is_none());
         drop(first);
         assert!(gate.try_acquire().is_some());
+    }
+
+    #[test]
+    fn chooser_failure_discards_only_its_pending_result_session() {
+        let port = Arc::new(UnusedSystemPort);
+        let results = ResultService::new(port.clone(), port);
+        let first = results.publish(Vec::new());
+        let replacement = results.publish(Vec::new());
+
+        clear_results_if_chooser_unavailable(&results, first.session_id, false);
+        assert_eq!(
+            results.snapshot().map(|pending| pending.session_id),
+            Some(replacement.session_id)
+        );
+
+        clear_results_if_chooser_unavailable(&results, replacement.session_id, false);
+        assert!(results.snapshot().is_none());
     }
 }
