@@ -21,11 +21,11 @@ jobs:
       CARGO_TERM_COLOR: always
       CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\msvc-runtime.cmake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.97.1
         with:
           components: rustfmt, clippy
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24.18.0
           cache: npm
@@ -84,7 +84,7 @@ jobs:
         run: npm run tauri -- build --bundles nsis
 
       - name: Upload validation artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: QRForge-Windows-${{ github.sha }}
           if-no-files-found: error
