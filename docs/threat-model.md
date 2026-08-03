@@ -39,6 +39,7 @@ native capture -> native decoder -> Rust safety policy
 | Sensitive local history | Disable/retention options, minimal fields, least-privilege storage |
 | Export path overwrite | User-selected canonical path and overwrite confirmation |
 | Supply-chain compromise | Lockfiles, pinned CI actions, audits, signed releases and update manifests |
+| Support-data leakage | Rust-generated fixed diagnostic fields, stable error categories, bounded logs, no payloads or absolute paths |
 
 ## Privacy invariants
 

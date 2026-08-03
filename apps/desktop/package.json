@@ -1,6 +1,6 @@
 {
   "name": "@qrforge/desktop-ui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -37,5 +37,17 @@
   },
   "optionalDependencies": {
     "@tauri-apps/cli-win32-x64-msvc": "2.11.4"
+  },
+  "overrides": {
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@10.2.5": {
+      "brace-expansion": "5.0.9"
+    }
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": false
   }
 }

@@ -4,13 +4,12 @@ QRForge is a local-first Windows tray utility that scans QR codes from a
 selected display. Capture and decoding stay in native memory; the application
 does not upload or persist screenshots.
 
-## Phase 1.1 status
+## Phase 1.2 status
 
-The polished Windows screen-scanning phase is complete for the tested
-single-display configuration. See the
-[Phase 1.1 completion report](docs/phase-1-1-results.md) for exact automated,
-runtime, performance, accessibility, fixture, installer, and remaining
-physical-hardware evidence.
+Windows release hardening is being validated on the Phase 1.1 screen-scanning
+baseline. See the [Phase 1.2 report](docs/phase-1-2-results.md) for exact
+automated, inspected, runtime, installer, and untested evidence. The 51-case
+Phase 1.1 manual RC matrix remains `Not run` unless physically exercised.
 
 The current scope is intentionally narrow:
 
@@ -24,7 +23,7 @@ The current scope is intentionally narrow:
 - first-run local-processing guidance and specific scan feedback
 - lazy creation and destruction of Settings and result webviews
 - atomic, versioned local settings
-- opt-in payload-free performance diagnostics
+- explicit privacy-safe Copy Diagnostics and bounded opt-in local logs
 
 Smart Scroll, webcam capture, history, updating, and broad UI redesign remain
 deferred.
@@ -32,6 +31,12 @@ deferred.
 ## Documentation
 
 - [Development and builds](docs/development.md)
+- [Windows release procedure](docs/release-procedure.md)
+- [Installer behavior](docs/installer-behavior.md)
+- [Diagnostics and logging](docs/diagnostics.md)
+- [Dependency security and licensing](docs/dependency-security.md)
+- [Signing readiness](docs/signing-readiness.md)
+- [Phase 1.2 hardening report](docs/phase-1-2-results.md)
 - [Threat model](docs/threat-model.md)
 - [Performance budgets](docs/performance-budgets.md)
 - [Phase 1.1 completion report](docs/phase-1-1-results.md)

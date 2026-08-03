@@ -56,15 +56,19 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::complete_onboarding,
+            commands::copy_diagnostics,
             commands::get_pending_results,
             commands::perform_result_action
         ])
         .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
-            let diagnostics = Arc::new(Diagnostics::new(&data_dir));
+            let diagnostics = Arc::new(Diagnostics::new(&data_dir, process_started));
             let repository: Arc<dyn SettingsRepository> =
                 Arc::new(FileSettingsRepository::new(data_dir.join("settings.json")));
-            let initial_settings = repository.load().unwrap_or_else(|_| AppSettings::default());
+            let initial_settings = repository.load().unwrap_or_else(|_| {
+                diagnostics.record_error("settings_load_failed");
+                AppSettings::default()
+            });
             let settings_state = Arc::new(SettingsState::new(initial_settings.clone()));
             let notifications: Arc<dyn NotificationPort> =
                 Arc::new(TauriNotifications::new(app.handle().clone()));
@@ -77,7 +81,7 @@ pub fn run() {
                     capture: capture.clone(),
                     decoder: Arc::new(ZxingDecoder),
                     browser,
-                    clipboard,
+                    clipboard: clipboard.clone(),
                     notifications: notifications.clone(),
                     clock: Arc::new(SystemClock::new()),
                 },
@@ -107,10 +111,12 @@ pub fn run() {
                 capture,
                 results,
                 notifications: notifications.clone(),
+                clipboard,
                 diagnostics: diagnostics.clone(),
             });
             tray::create(app)?;
             if hotkey_conflict {
+                diagnostics.record_error("hotkey_registration_failed");
                 let _ = notifications.notify(Notification::HotkeyConflict);
             }
             if hotkey_conflict || !initial_settings.onboarding_completed {

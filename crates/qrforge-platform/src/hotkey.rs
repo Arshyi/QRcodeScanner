@@ -61,16 +61,16 @@ impl HotkeyPort for TauriHotkey {
             self.unregister(previous)?;
         }
         if let Err(registration_error) = self.register(requested) {
-            if let Some(previous) = previous.as_ref() {
-                if let Err(rollback_error) = self.register(previous) {
-                    *active = None;
-                    return Err(PortError::new(
-                        "hotkey_rollback",
-                        format!(
-                            "replacement failed ({registration_error}); previous registration could not be restored ({rollback_error})"
-                        ),
-                    ));
-                }
+            if let Some(previous) = previous.as_ref()
+                && let Err(rollback_error) = self.register(previous)
+            {
+                *active = None;
+                return Err(PortError::new(
+                    "hotkey_rollback",
+                    format!(
+                        "replacement failed ({registration_error}); previous registration could not be restored ({rollback_error})"
+                    ),
+                ));
             }
             return Err(registration_error);
         }

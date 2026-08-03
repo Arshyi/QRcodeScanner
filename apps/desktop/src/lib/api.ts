@@ -32,6 +32,7 @@ export interface SettingsSnapshot {
 export interface SettingsView {
   snapshot: SettingsSnapshot;
   version: string;
+  commit: string;
   build: string;
   monitors: MonitorInfo[];
   configuredMonitorAvailable: boolean;
@@ -89,6 +90,10 @@ export interface CommandError {
   message: string;
 }
 
+export interface CopyDiagnosticsOutcome {
+  message: string;
+}
+
 export function getSettings(): Promise<SettingsView> {
   return invoke<SettingsView>('get_settings');
 }
@@ -99,6 +104,10 @@ export function updateSettings(request: SettingsUpdate): Promise<SettingsView> {
 
 export function completeOnboarding(): Promise<SettingsView> {
   return invoke<SettingsView>('complete_onboarding');
+}
+
+export function copyDiagnostics(): Promise<CopyDiagnosticsOutcome> {
+  return invoke<CopyDiagnosticsOutcome>('copy_diagnostics');
 }
 
 export function getPendingResults(): Promise<PendingResultsView> {

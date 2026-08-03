@@ -2,10 +2,10 @@
 
 ## Supported host
 
-Phase 1.1 targets 64-bit Windows 10 or newer. Development requires:
+Phase 1.2 targets 64-bit Windows 10 or newer. Development requires:
 
 - current stable Rust installed through Rustup; the workspace minimum is Rust
-  1.85
+  1.88
 - Visual Studio 2022 Build Tools with the **Desktop development with C++**
   workload, including the x64 MSVC toolset, a Windows 10/11 SDK, and CMake
 - Node.js and npm
@@ -75,6 +75,13 @@ default `target` directory should be used again.
 
 ## Required validation
 
+`Cargo.toml` `[workspace.package].version` is the canonical application
+version. Verify every repeated Tauri/npm declaration before normal checks:
+
+```powershell
+.\scripts\release\Test-VersionConsistency.ps1
+```
+
 Run these commands from the repository root:
 
 ```powershell
@@ -111,8 +118,9 @@ The NSIS installer is emitted under:
 target\release\bundle\nsis\QRForge_<version>_x64-setup.exe
 ```
 
-Release signing is not configured in Phase 1, so a successful local bundle is
-an unsigned test installer.
+Release signing is not configured, so a successful local bundle is an unsigned
+test installer. The complete fail-closed candidate process is documented in
+`docs/release-procedure.md`.
 
 Current measured Release timings, process counts, memory, artifact hashes, and
 installer validation are recorded in `docs/phase-1-1-results.md`.
@@ -153,7 +161,9 @@ Settings live in Tauri's per-user application-data directory as
 replacement. Malformed JSON falls back to validated defaults without deleting
 the corrupt source file; the next successful settings save replaces it.
 
-When `QRFORGE_DIAGNOSTICS=1` is present at launch, QRForge writes local JSONL
-timings and lifecycle events. Diagnostics contain result categories, timing,
-frame dimensions, and monitor/scaling metadata, but never pixels or decoded
-payload bytes. Diagnostics are disabled by default.
+When `QRFORGE_DIAGNOSTICS=1` is present at launch, QRForge writes bounded local
+JSONL timings and lifecycle events. The active 256 KiB file and one archive
+contain result categories, timing, frame dimensions, and scaling—but never
+pixels, monitor labels, or decoded payload bytes. Diagnostics are disabled by
+default. Settings also offers an explicit privacy-safe Copy Diagnostics action;
+see `docs/diagnostics.md`.
