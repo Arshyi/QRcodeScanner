@@ -241,6 +241,63 @@ mod tests {
     }
 
     #[test]
+    fn stale_partial_files_are_ignored_during_recovery() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("settings.json");
+        let repository = FileSettingsRepository::new(path.clone());
+        let expected = AppSettings {
+            notifications_enabled: false,
+            onboarding_completed: true,
+            ..AppSettings::default()
+        };
+        repository.save(&expected).expect("save valid settings");
+        fs::write(
+            directory.path().join("settings.json.partial"),
+            b"{truncated",
+        )
+        .expect("write orphan partial file");
+
+        assert_eq!(
+            repository.load().expect("load canonical settings"),
+            expected
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn failed_atomic_replacement_preserves_existing_settings() {
+        use std::fs::OpenOptions;
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("settings.json");
+        let repository = FileSettingsRepository::new(path.clone());
+        let original = AppSettings::default();
+        repository.save(&original).expect("save original");
+        let original_bytes = fs::read(&path).expect("read original");
+        let locked = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("lock existing settings");
+
+        let replacement = AppSettings {
+            auto_open_safe_urls: false,
+            ..original.clone()
+        };
+        assert!(repository.save(&replacement).is_err());
+        drop(locked);
+        assert_eq!(
+            fs::read(&path).expect("read preserved settings"),
+            original_bytes
+        );
+        assert_eq!(
+            repository.load().expect("reload preserved settings"),
+            original
+        );
+    }
+
+    #[test]
     fn migrates_schema_one_monitor_and_onboarding_defaults() {
         let directory = tempdir().expect("tempdir");
         let path = directory.path().join("settings.json");

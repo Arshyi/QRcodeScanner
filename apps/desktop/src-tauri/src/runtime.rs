@@ -1,6 +1,6 @@
 use crate::{diagnostics::Diagnostics, tray, window};
 use qrforge_application::{
-    CapturePort, NotificationPort, ResultService, ScanService, SettingsService,
+    CapturePort, ClipboardPort, NotificationPort, ResultService, ScanService, SettingsService,
 };
 use std::{
     sync::{
@@ -23,6 +23,8 @@ pub struct RuntimeState {
     pub results: Arc<ResultService>,
     /// Native/tray feedback adapter.
     pub notifications: Arc<dyn NotificationPort>,
+    /// Native clipboard adapter used only for explicit user actions.
+    pub clipboard: Arc<dyn ClipboardPort>,
     /// Opt-in local diagnostics recorder used by window lifecycle events.
     pub diagnostics: Arc<Diagnostics>,
 }
@@ -74,11 +76,15 @@ impl ScanDispatcher {
                 let pending = dispatcher
                     .results
                     .publish(std::mem::take(&mut report.result_items));
+                let chooser_available = window::open_results(&dispatcher.app).is_ok();
                 clear_results_if_chooser_unavailable(
                     &dispatcher.results,
                     pending.session_id,
-                    window::open_results(&dispatcher.app).is_ok(),
+                    chooser_available,
                 );
+                if !chooser_available {
+                    dispatcher.diagnostics.record_error("results_window_failed");
+                }
             }
             dispatcher
                 .diagnostics

@@ -3,6 +3,7 @@
   import {
     commandMessage,
     completeOnboarding,
+    copyDiagnostics,
     getSettings,
     updateSettings,
     type AppSettings,
@@ -96,6 +97,21 @@
     errorMessage = '';
     try {
       view = await completeOnboarding();
+    } catch (error) {
+      errorMessage = commandMessage(error);
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function copySupportDiagnostics(): Promise<void> {
+    if (saving) return;
+    saving = true;
+    errorMessage = '';
+    savedMessage = '';
+    try {
+      const outcome = await copyDiagnostics();
+      savedMessage = outcome.message;
     } catch (error) {
       errorMessage = commandMessage(error);
     } finally {
@@ -305,6 +321,24 @@
       </div>
     </section>
 
+    <section class="card support" aria-labelledby="support-heading">
+      <div>
+        <p class="label" id="support-heading">Support diagnostics</p>
+        <p class="hint">
+          Copies version, platform state, and stable error categories only. QR contents,
+          screenshots, usernames, tokens, and absolute paths are excluded.
+        </p>
+      </div>
+      <button
+        class="secondary"
+        type="button"
+        onclick={() => void copySupportDiagnostics()}
+        disabled={saving}
+      >
+        Copy diagnostics
+      </button>
+    </section>
+
     <div class="status-area" aria-live="polite">
       {#if errorMessage}
         <p class="notice error" role="alert">{errorMessage}</p>
@@ -315,7 +349,11 @@
 
     <footer>
       <span>Version {view.version}</span>
-      <span>{view.build}</span>
+      <span
+        >{view.build} · {view.commit === 'unknown'
+          ? 'commit unknown'
+          : view.commit.slice(0, 12)}</span
+      >
     </footer>
   {/if}
 </main>

@@ -1,4 +1,4 @@
-use crate::runtime::RuntimeState;
+use crate::{diagnostics::DiagnosticSnapshot, runtime::RuntimeState};
 use qrforge_application::{
     Notification, PendingResultsView, ResultActionError, ResultActionOutcome, ResultActionRequest,
     SettingsError, SettingsSnapshot, SettingsUpdate,
@@ -15,6 +15,8 @@ pub struct SettingsView {
     pub snapshot: SettingsSnapshot,
     /// Semantic application version.
     pub version: &'static str,
+    /// Source commit embedded at compile time.
+    pub commit: &'static str,
     /// Compile-time target identifier.
     pub build: String,
     /// Current native display topology.
@@ -32,6 +34,14 @@ pub struct CommandError {
     /// Stable machine-readable code.
     pub code: &'static str,
     /// User-safe message that never contains QR payloads.
+    pub message: &'static str,
+}
+
+/// Confirmation for an explicit privacy-safe diagnostics copy action.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDiagnosticsOutcome {
+    /// User-safe status text.
     pub message: &'static str,
 }
 
@@ -60,25 +70,35 @@ pub fn update_settings(
             let _ = crate::tray::refresh_idle_tooltip(&app);
             Ok(view(&state, snapshot))
         }
-        Err(SettingsError::InvalidHotkey(_)) => Err(CommandError {
-            code: "invalid_hotkey",
-            message: "Use a non-reserved shortcut with a modifier and one letter, digit, or F-key.",
-        }),
-        Err(SettingsError::InvalidMonitor(_)) => Err(CommandError {
-            code: "invalid_monitor",
-            message: "That display selection is invalid. Refresh the display list and try again.",
-        }),
+        Err(SettingsError::InvalidHotkey(_)) => {
+            state.diagnostics.record_error("settings_invalid_hotkey");
+            Err(CommandError {
+                code: "invalid_hotkey",
+                message: "Use a non-reserved shortcut with a modifier and one letter, digit, or F-key.",
+            })
+        }
+        Err(SettingsError::InvalidMonitor(_)) => {
+            state.diagnostics.record_error("settings_invalid_monitor");
+            Err(CommandError {
+                code: "invalid_monitor",
+                message: "That display selection is invalid. Refresh the display list and try again.",
+            })
+        }
         Err(SettingsError::HotkeyRegistration(_)) => {
+            state.diagnostics.record_error("hotkey_registration_failed");
             let _ = state.notifications.notify(Notification::HotkeyConflict);
             Err(CommandError {
                 code: "hotkey_conflict",
                 message: "That shortcut is already in use. The previous shortcut is still active.",
             })
         }
-        Err(_) => Err(CommandError {
-            code: "settings_update_failed",
-            message: "Settings could not be saved. Existing settings remain active.",
-        }),
+        Err(_) => {
+            state.diagnostics.record_error("settings_update_failed");
+            Err(CommandError {
+                code: "settings_update_failed",
+                message: "Settings could not be saved. Existing settings remain active.",
+            })
+        }
     }
 }
 
@@ -91,10 +111,50 @@ pub fn complete_onboarding(state: State<'_, RuntimeState>) -> Result<SettingsVie
         .settings
         .complete_onboarding()
         .map(|snapshot| view(&state, snapshot))
-        .map_err(|_| CommandError {
-            code: "onboarding_save_failed",
-            message: "QRForge could not save first-run completion. Please try again.",
+        .map_err(|_| {
+            state.diagnostics.record_error("onboarding_save_failed");
+            CommandError {
+                code: "onboarding_save_failed",
+                message: "QRForge could not save first-run completion. Please try again.",
+            }
         })
+}
+
+/// Copies a fixed-format support snapshot that excludes user content and paths.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn copy_diagnostics(
+    state: State<'_, RuntimeState>,
+) -> Result<CopyDiagnosticsOutcome, CommandError> {
+    let snapshot = state.settings.snapshot();
+    let monitor_result = state.capture.monitors();
+    let (monitor_count, configured_monitor_available, monitor_error) = match monitor_result {
+        Ok(monitors) => {
+            let available = snapshot
+                .settings
+                .scan_monitor_id
+                .as_ref()
+                .is_none_or(|id| monitors.iter().any(|monitor| &monitor.id == id));
+            (monitors.len(), available, false)
+        }
+        Err(_) => (0, snapshot.settings.scan_monitor_id.is_none(), true),
+    };
+    let text = state.diagnostics.snapshot_text(&DiagnosticSnapshot {
+        settings: &snapshot,
+        monitor_count,
+        configured_monitor_available,
+        monitor_error,
+    });
+    state.clipboard.set_text(&text).map_err(|_| {
+        state.diagnostics.record_error("diagnostics_copy_failed");
+        CommandError {
+            code: "diagnostics_copy_failed",
+            message: "Windows could not copy the privacy-safe diagnostics.",
+        }
+    })?;
+    Ok(CopyDiagnosticsOutcome {
+        message: "Privacy-safe diagnostics copied.",
+    })
 }
 
 /// Returns the current native multi-code chooser session.
@@ -118,10 +178,11 @@ pub fn perform_result_action(
     state: State<'_, RuntimeState>,
     app: AppHandle<Wry>,
 ) -> Result<ResultActionOutcome, CommandError> {
-    let outcome = state
-        .results
-        .perform(&request)
-        .map_err(|error| result_error(&error))?;
+    let outcome = state.results.perform(&request).map_err(|error| {
+        let safe = result_error(&error);
+        state.diagnostics.record_error(safe.code);
+        safe
+    })?;
     if outcome.close {
         let _ = crate::window::close_results(&app);
     }
@@ -170,6 +231,7 @@ fn view(state: &RuntimeState, snapshot: SettingsSnapshot) -> SettingsView {
     SettingsView {
         snapshot,
         version: env!("CARGO_PKG_VERSION"),
+        commit: env!("QRFORGE_BUILD_COMMIT"),
         build: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
         monitors,
         configured_monitor_available,
