@@ -1,0 +1,97 @@
+name: Windows release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Exact branch, tag, or commit to validate
+        required: true
+        type: string
+      version:
+        description: Exact semantic version expected in every manifest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-rc-${{ inputs.release_ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+      CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\msvc-runtime.cmake
+    steps:
+      - name: Check out requested ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@46511b1c83438f0dd37c02d843619ece5a4abb5b # 1.97.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: |
+            . -> target
+            spikes -> spikes/target
+
+      - name: Capture checked-out commit
+        id: identity
+        shell: pwsh
+        run: |
+          $commit = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          "commit=$commit" >> $env:GITHUB_OUTPUT
+          "QRFORGE_BUILD_COMMIT=$commit" >> $env:GITHUB_ENV
+
+      - name: Install pinned supply-chain tools
+        shell: pwsh
+        run: |
+          cargo install --locked cargo-audit --version 0.22.2
+          cargo install --locked cargo-deny --version 0.20.2
+
+      - name: Validate unsigned release candidate
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+          EXPECTED_REF: ${{ inputs.release_ref }}
+          EXPECTED_COMMIT: ${{ steps.identity.outputs.commit }}
+        run: >-
+          ./scripts/release/Validate-Release.ps1
+          -ExpectedVersion $env:EXPECTED_VERSION
+          -ExpectedRef $env:EXPECTED_REF
+          -ExpectedCommit $env:EXPECTED_COMMIT
+
+      - name: Upload unsigned release-candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: QRForge-${{ inputs.version }}-unsigned-rc-${{ steps.identity.outputs.commit }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            target/release/bundle/nsis/QRForge_${{ inputs.version }}_x64-setup.exe
+            target/release/bundle/nsis/SHA256SUMS.txt
+            target/release/bundle/nsis/release-manifest.json
+            target/release-validation/decoder-summary.json
+            THIRD_PARTY_NOTICES.md
+
+      - name: Release boundary
+        shell: pwsh
+        run: |
+          Write-Output 'Unsigned candidate only: no signing, tag, GitHub Release, publishing, installation, or push was performed.'

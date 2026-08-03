@@ -20,17 +20,18 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\msvc-runtime.cmake
+      QRFORGE_BUILD_COMMIT: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@46511b1c83438f0dd37c02d843619ece5a4abb5b # 1.97.1
         with:
           components: rustfmt, clippy
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24.18.0
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: |
             . -> target
@@ -40,6 +41,12 @@ jobs:
         run: |
           cargo fmt --all --check
           cargo fmt --manifest-path spikes/Cargo.toml --all --check
+
+      - name: Version consistency
+        shell: pwsh
+        run: |
+          $version = (./scripts/release/Test-VersionConsistency.ps1).Version
+          ./scripts/release/Test-ReleaseTooling.ps1 -ExpectedVersion $version
 
       - name: Rust workspace check
         run: cargo check --workspace --all-targets --locked
@@ -84,7 +91,7 @@ jobs:
         run: npm run tauri -- build --bundles nsis
 
       - name: Upload validation artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: QRForge-Windows-${{ github.sha }}
           if-no-files-found: error

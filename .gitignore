@@ -4,4 +4,12 @@
 apps/desktop/dist/
 *.pdb
 *.log
+*.tmp
+*.temp
+*.dmp
+diagnostics.jsonl*
+.env
+.env.*
+!.env.example
 .DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+[advisories]
+# cargo-audit scans every target represented by Cargo.lock and cannot apply the
+# Windows-only release graph used by cargo-deny. The remaining affected
+# quick-xml versions are build dependencies of xcb/Wayland through xcap and are
+# absent from `cargo tree --target x86_64-pc-windows-msvc`. The Windows plist
+# path is upgraded to quick-xml 0.41.0. Review these exceptions on every release
+# and remove them when xcap's non-Windows graph updates. Review deadline:
+# 2026-11-01. Owner: QRForge release maintainer.
+ignore = [
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]
