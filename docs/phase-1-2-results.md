@@ -34,6 +34,9 @@ Status: implementation and local validation in progress; not published.
   permission.
 - Dependency, native decoder provenance, third-party notices, installer,
   release, diagnostics, and signing policies.
+- Prettier explicitly accepts the checkout's existing line ending so a clean
+  Windows repository using system `core.autocrlf=true` does not fail solely
+  because tracked text is materialized as CRLF.
 
 ## Evidence classification
 
