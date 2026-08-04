@@ -76,6 +76,10 @@ evidence commit does not change that candidate's bytes or manifest identity.
 8. Independent hygiene review removed the machine-specific checkout path from
    this committed report. A fresh dependency refresh also moved the transitive
    development-only PostCSS package from affected 8.5.18 to patched 8.5.25.
+9. An exact-commit RC dispatch exposed a detached-HEAD null dereference before
+   validation began. Git identity parsing now accepts the documented branch,
+   tag, or commit inputs while still failing closed on unresolved revisions or
+   Git command errors.
 
 ## Automated local validation
 
