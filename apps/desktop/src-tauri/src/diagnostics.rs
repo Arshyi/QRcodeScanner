@@ -3,7 +3,7 @@ use serde_json::json;
 use std::{
     collections::VecDeque,
     fs::{self, OpenOptions},
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::{Mutex, PoisonError},
     time::{Duration, Instant},
@@ -207,6 +207,12 @@ fn initialize(path: &Path) -> std::io::Result<()> {
 }
 
 fn rotate_if_needed(path: &Path, incoming_bytes: u64) -> std::io::Result<()> {
+    if incoming_bytes > MAX_LOG_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "diagnostic record exceeds the active log limit",
+        ));
+    }
     let current_bytes = fs::metadata(path).map_or(0, |metadata| metadata.len());
     if current_bytes == 0 || current_bytes.saturating_add(incoming_bytes) <= MAX_LOG_BYTES {
         return Ok(());
@@ -216,6 +222,13 @@ fn rotate_if_needed(path: &Path, incoming_bytes: u64) -> std::io::Result<()> {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error),
+    }
+    // Phase 1.1 logs had no size limit. Do not preserve an arbitrarily large
+    // legacy file as the single archive, because that would violate the
+    // documented two-file retention bound indefinitely.
+    if current_bytes > MAX_LOG_BYTES {
+        fs::remove_file(path)?;
+        return Ok(());
     }
     fs::rename(path, archive)
 }
@@ -333,6 +346,36 @@ mod tests {
         assert!(fs::metadata(&path).expect("active metadata").len() <= MAX_LOG_BYTES);
         assert!(fs::metadata(&archive).expect("archive metadata").len() <= MAX_LOG_BYTES);
         assert!(!directory.path().join("diagnostics.jsonl.2").exists());
+    }
+
+    #[test]
+    fn oversized_legacy_log_is_discarded_before_the_next_record() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join(LOG_NAME);
+        let max_log_bytes = usize::try_from(MAX_LOG_BYTES).expect("log limit fits usize");
+        fs::write(&path, vec![b'x'; max_log_bytes + 1]).expect("seed legacy log");
+        let diagnostics = Diagnostics::with_path(Some(path.clone()), Instant::now());
+
+        diagnostics.record_window("settings_window_created", Some(Duration::from_millis(1)));
+
+        let active = fs::read_to_string(&path).expect("read bounded active log");
+        assert!(active.len() < max_log_bytes);
+        let record: serde_json::Value =
+            serde_json::from_str(active.trim()).expect("active log remains JSONL");
+        assert_eq!(record["event"], "settings_window_created");
+        assert!(!path.with_file_name(ARCHIVE_NAME).exists());
+    }
+
+    #[test]
+    fn rotation_rejects_a_record_larger_than_the_log_limit() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join(LOG_NAME);
+
+        let error = rotate_if_needed(&path, MAX_LOG_BYTES + 1)
+            .expect_err("oversized record must be rejected");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!path.exists());
     }
 
     #[test]

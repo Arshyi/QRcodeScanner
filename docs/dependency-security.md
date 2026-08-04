@@ -83,6 +83,16 @@ brace-expansion 1.1.18 and minimatch 10.2.5 to brace-expansion 5.0.9. Both
 patched versions remain inside the parents' declared semver ranges; the rest of
 the dependency graph is not bulk-updated.
 
+A 2026-08-04 refresh found the moderate PostCSS advisory
+GHSA-fxqj-rqcc-2cmp in the development build/lint graph. The lockfile was
+narrowly updated from PostCSS 8.5.18 to patched 8.5.25 without adding a direct
+dependency or changing application packages. The same refresh found
+RUSTSEC-2026-0221 in `event-listener` 5.4.1. `cargo tree --target
+x86_64-pc-windows-msvc` proves that crate is absent from the Windows build; its
+all-target path is through the non-Windows zbus/notification stack. The warning
+is not suppressed. Review it on each candidate and no later than 2026-11-01,
+then remove the old lockfile node when upstream target dependencies permit.
+
 npm install scripts are fail-closed through `strict-allow-scripts=true`.
 `esbuild@0.28.1` is the sole approved script: its package install hook selects
 and verifies the locked platform binary required by Vite. The approval is

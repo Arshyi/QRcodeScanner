@@ -6,7 +6,7 @@ physical/manual cases remain `Not run`.
 
 ## Repository baseline
 
-- Repository: `C:\Users\DELL\Desktop\QRcodeScanner`
+- Repository: QRForge repository root (machine-specific checkout path omitted)
 - Starting branch: `main`
 - Starting/local/remote commit:
   `b341b4c6e660b86a4a0b95eec18079ef03ef47f5`
@@ -65,6 +65,17 @@ evidence commit does not change that candidate's bytes or manifest identity.
 5. Interrupted-settings recovery did not explicitly cover stale partial files
    or a Windows sharing-violation replacement failure. Focused tests now prove
    the committed settings remain authoritative and unchanged.
+6. Post-merge review found that an oversized legacy Phase 1.1 log could be
+   preserved as an archive larger than the documented cap. The next event now
+   discards that legacy file before writing a valid bounded JSONL record, and
+   oversized individual records are rejected.
+7. Local incremental builds watched `.git/HEAD` but not the active branch ref,
+   allowing embedded commit identity to become stale after a commit with no
+   source change. The build script now watches Git's resolved HEAD, packed refs,
+   and active ref path, including worktree layouts.
+8. Independent hygiene review removed the machine-specific checkout path from
+   this committed report. A fresh dependency refresh also moved the transitive
+   development-only PostCSS package from affected 8.5.18 to patched 8.5.25.
 
 ## Automated local validation
 
@@ -108,6 +119,9 @@ is `Not run`.
 ## Security and dependency evidence
 
 - `npm audit`: zero vulnerabilities after the narrow brace-expansion fixes.
+- A post-merge 2026-08-04 refresh resolved moderate
+  GHSA-fxqj-rqcc-2cmp by narrowly updating transitive development-only PostCSS
+  from 8.5.18 to 8.5.25.
 - The supported `x86_64-pc-windows-msvc` Cargo graph is clear of the discovered
   `quick-xml` findings. The remaining quick-xml 0.30/0.39 copies occur only
   beneath xcap's xcb/Wayland non-Windows build graph.
@@ -118,8 +132,10 @@ is `Not run`.
 - `cargo deny` scopes its graph to `x86_64-pc-windows-msvc`, denies unknown
   registries/Git sources and yanked crates, and enforces the reviewed license
   allow-list. Its 19 contextual warnings are transitive unmaintained/unsound
-  packages, primarily non-Windows GTK paths plus `paste` through ZXing and
-  Unicode dependencies through Tauri.
+  packages, primarily non-Windows GTK/D-Bus paths plus `paste` through ZXing
+  and Unicode dependencies through Tauri. RUSTSEC-2026-0221 in
+  `event-listener` 5.4.1 is absent from the Windows target and remains visible,
+  documented, and scheduled for review rather than suppressed.
 - ZXing remains `zxing-cpp` 0.5.2, a bundled static C++ core under Apache-2.0;
   source, version, linkage, and attribution are documented.
 - Full-SHA GitHub Action pins, dependency review instructions, vulnerability
