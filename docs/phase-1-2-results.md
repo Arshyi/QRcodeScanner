@@ -80,6 +80,10 @@ evidence commit does not change that candidate's bytes or manifest identity.
    validation began. Git identity parsing now accepts the documented branch,
    tag, or commit inputs while still failing closed on unresolved revisions or
    Git command errors.
+10. A cold Windows RC build then exposed checkout-dependent newline churn in
+    the Tauri manifest and generated capability schemas. LF is now explicit
+    for only those generator-touched files so the final clean-tree assertion is
+    reproducible without weakening it or normalizing unrelated files.
 
 ## Automated local validation
 
