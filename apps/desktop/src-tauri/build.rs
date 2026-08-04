@@ -1,10 +1,12 @@
 //! Tauri resource/capability build script and build identity capture.
 
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=QRFORGE_BUILD_COMMIT");
-    println!("cargo:rerun-if-changed=../../../.git/HEAD");
+    for path in git_watch_paths() {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
     let commit = std::env::var("QRFORGE_BUILD_COMMIT")
         .ok()
         .or_else(git_head)
@@ -15,10 +17,38 @@ fn main() {
 }
 
 fn git_head() -> Option<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
+    git_output(&["rev-parse", "HEAD"])
+}
+
+fn git_watch_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for logical_path in ["HEAD", "packed-refs"] {
+        if let Some(path) = git_path(logical_path) {
+            paths.push(path);
+        }
+    }
+    if let Some(reference) = git_output(&["symbolic-ref", "-q", "HEAD"])
+        && let Some(path) = git_path(&reference)
+    {
+        paths.push(path);
+    }
+    paths.sort_unstable();
+    paths.dedup();
+    paths
+}
+
+fn git_path(logical_path: &str) -> Option<PathBuf> {
+    git_output(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        logical_path,
+    ])
+    .map(PathBuf::from)
+}
+
+fn git_output(arguments: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(arguments).output().ok()?;
     output
         .status
         .success()

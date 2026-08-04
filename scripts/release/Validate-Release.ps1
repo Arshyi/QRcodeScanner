@@ -47,12 +47,24 @@ try {
     if ($ExpectedRef.Contains('..')) {
         throw 'ExpectedRef may not contain a double-dot revision expression.'
     }
-    $currentCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
-    $expectedRefCommit = (git rev-parse --verify "$ExpectedRef^{commit}").Trim().ToLowerInvariant()
-    if ($LASTEXITCODE -ne 0 -or $expectedRefCommit -ne $currentCommit) {
+    $currentCommitOutput = @(git rev-parse HEAD)
+    if ($LASTEXITCODE -ne 0 -or $currentCommitOutput.Count -ne 1) {
+        throw 'Unable to resolve the current Git commit.'
+    }
+    $currentCommit = $currentCommitOutput[0].Trim().ToLowerInvariant()
+    $expectedRefOutput = @(git rev-parse --verify "$ExpectedRef^{commit}")
+    if ($LASTEXITCODE -ne 0 -or $expectedRefOutput.Count -ne 1) {
+        throw "Unable to resolve intended ref $ExpectedRef to a commit."
+    }
+    $expectedRefCommit = $expectedRefOutput[0].Trim().ToLowerInvariant()
+    if ($expectedRefCommit -ne $currentCommit) {
         throw "HEAD $currentCommit does not resolve from intended ref $ExpectedRef."
     }
-    $symbolicRef = (git branch --show-current).Trim()
+    $symbolicRefOutput = @(git branch --show-current)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect the current Git branch.'
+    }
+    $symbolicRef = ($symbolicRefOutput -join '').Trim()
     if ($symbolicRef -and $symbolicRef -ne $ExpectedRef) {
         throw "Current branch is $symbolicRef; expected $ExpectedRef."
     }

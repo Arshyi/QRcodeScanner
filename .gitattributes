@@ -1,0 +1,5 @@
+/apps/desktop/src-tauri/Cargo.toml text eol=lf
+/apps/desktop/src-tauri/gen/schemas/desktop-schema.json text eol=lf
+/apps/desktop/src-tauri/gen/schemas/windows-schema.json text eol=lf
+/spikes/tauri-idle/src-tauri/gen/schemas/desktop-schema.json text eol=lf
+/spikes/tauri-idle/src-tauri/gen/schemas/windows-schema.json text eol=lf
